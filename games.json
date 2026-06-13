@@ -3,6 +3,17 @@
   "title": "3D",
   "games": [
     {
+      "slug": "cube-runner",
+      "title": "Cube Runner",
+      "path": "games/cube-runner/",
+      "icon": "🏃",
+      "color": "#5ad1a8",
+      "dims": "3D",
+      "tags": ["drag", "arrows", "endless", "three.js"],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
       "slug": "helix-drop",
       "title": "Helix Drop",
       "path": "games/helix-drop/",
@@ -21,16 +32,6 @@
       "tags": ["tap", "tower", "three.js"],
       "license": "MIT",
       "credit": "Gamf · stack-tower design"
-    },
-    {
-      "slug": "sample-cube",
-      "title": "Spin Cube",
-      "path": "games/sample-cube/",
-      "icon": "🧊",
-      "dims": "3D",
-      "tags": ["drag", "three.js"],
-      "license": "MIT",
-      "credit": "Gamf sample"
     }
   ]
 }

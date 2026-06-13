@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#07080c">
+  <title>Cube Runner — Gamf</title>
+  <meta name="description" content="Endless 3D neon runner. Dodge obstacles, switch lanes, chase the high score.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <style>
+    /* genre accent for this game (3D = mint) */
+    body { --gx-accent: #5ad1a8; }
+    html, body { height: 100%; overflow: hidden; touch-action: none;
+      -webkit-user-select: none; user-select: none; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    /* big countdown-style speed flash overlay (purely cosmetic, no interaction) */
+    .cr-flash { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 64px);
+      text-align: center; z-index: 4; pointer-events: none;
+      font-family: var(--gx-font-display); font-weight: 700; font-size: var(--fs-xl);
+      color: var(--gx-accent); text-shadow: 0 0 18px color-mix(in srgb, var(--gx-accent) 70%, transparent);
+      opacity: 0; transform: translateY(-6px); transition: opacity .25s var(--ease), transform .25s var(--ease); }
+    .cr-flash.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> 3D</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Score <b id="score">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+  </header>
+
+  <!-- speed-up flash -->
+  <div class="cr-flash" id="flash"></div>
+
+  <!-- controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> drag / swipe — change lane</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-left"/></svg><svg class="gx-ico"><use href="#i-right"/></svg> arrows / A D</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
+  </div>
+
+  <!-- pause / game-over modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Game over</h2>
+      <div class="gx-modal__row">Score <b id="finalScore">0</b></div>
+      <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { onDrag, onSwipe } from './touch.js';
+
+    // ---------------------------------------------------------------- seeded LCG
+    // No Math.random / Date — fully deterministic obstacle stream.
+    let seed = 0x1A2B3C4D >>> 0;
+    function srnd(){ seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; }
+    function srange(a, b){ return a + (b - a) * srnd(); }
+    function spick(arr){ return arr[Math.floor(srnd() * arr.length)]; }
+
+    // ---------------------------------------------------------------- high score
+    const BEST_KEY = 'gamf-3d-cube-runner-best';
+    let best = +(localStorage.getItem(BEST_KEY) || 0) || 0;
+    const scoreEl = document.getElementById('score');
+    const bestEl  = document.getElementById('best');
+    const flashEl = document.getElementById('flash');
+    bestEl.textContent = best;
+
+    // ---------------------------------------------------------------- track config
+    const LANES = [-2.4, 0, 2.4];     // x positions of the 3 lanes
+    const LANE_W = 2.4;
+    const TRACK_HALF = 4.2;           // half-width of the floor
+    const SPAWN_Z = -160;             // where obstacles appear (far)
+    const DESPAWN_Z = 14;             // where they get recycled (behind camera)
+    const PLAYER_Z = 0;               // player's fixed z
+    const ACCENT = 0x5ad1a8;
+
+    // ---------------------------------------------------------------- renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.18;
+    document.body.appendChild(renderer.domElement);
+
+    // ---------------------------------------------------------------- scene + fog
+    const scene = new THREE.Scene();
+    const FOG = 0x05060b;
+    scene.background = new THREE.Color(FOG);
+    scene.fog = new THREE.Fog(FOG, 22, 95);
+
+    const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 300);
+    camera.position.set(0, 4.4, 8);
+    camera.lookAt(0, 1.0, -18);
+
+    // ---------------------------------------------------------------- lights
+    scene.add(new THREE.HemisphereLight(0x88aaff, 0x0a0c16, 0.65));
+    const key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(5, 14, 6);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.near = 1; key.shadow.camera.far = 60;
+    key.shadow.camera.left = -10; key.shadow.camera.right = 10;
+    key.shadow.camera.top = 14; key.shadow.camera.bottom = -30;
+    scene.add(key);
+    const accentLight = new THREE.PointLight(ACCENT, 2.2, 26, 1.6);
+    accentLight.position.set(0, 2.2, 2);
+    scene.add(accentLight);
+
+    // ---------------------------------------------------------------- floor (scrolling neon grid)
+    const gridTex = (() => {
+      const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#070a12'; ctx.fillRect(0, 0, 128, 128);
+      ctx.strokeStyle = 'rgba(90,209,168,0.55)'; ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, 124, 124);
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(2, 60);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(TRACK_HALF * 2, 360),
+      new THREE.MeshStandardMaterial({
+        map: gridTex, color: 0x10131f, roughness: 0.55, metalness: 0.35,
+        emissive: new THREE.Color(ACCENT).multiplyScalar(0.05), emissiveMap: gridTex
+      })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0, SPAWN_Z / 2 + 10);
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // glowing tunnel side rails
+    const railGeo = new THREE.BoxGeometry(0.18, 0.5, 360);
+    const railMat = new THREE.MeshStandardMaterial({
+      color: 0x0c1420, emissive: new THREE.Color(ACCENT), emissiveIntensity: 1.4,
+      roughness: 0.3, metalness: 0.6
+    });
+    for (const sx of [-TRACK_HALF, TRACK_HALF]) {
+      const rail = new THREE.Mesh(railGeo, railMat);
+      rail.position.set(sx, 0.25, SPAWN_Z / 2 + 10);
+      scene.add(rail);
+    }
+
+    // ---------------------------------------------------------------- player cube
+    const player = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 1.1, 1.1),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: new THREE.Color(ACCENT), emissiveIntensity: 0.9,
+        roughness: 0.2, metalness: 0.5
+      })
+    );
+    player.castShadow = true;
+    player.position.set(0, 0.7, PLAYER_Z);
+    scene.add(player);
+    // wireframe halo for a "bloom" feel
+    const halo = new THREE.Mesh(
+      new THREE.BoxGeometry(1.32, 1.32, 1.32),
+      new THREE.MeshBasicMaterial({ color: ACCENT, wireframe: true, transparent: true, opacity: 0.45 })
+    );
+    player.add(halo);
+    const playerLight = new THREE.PointLight(ACCENT, 1.6, 9, 2);
+    player.add(playerLight);
+
+    // ---------------------------------------------------------------- obstacles (pooled)
+    const OBST_COLORS = [0xff5d6c, 0xffb454, 0x7c5cff, 0x4ea8ff];
+    const obstGeo = new THREE.BoxGeometry(1.7, 1.7, 1.7);
+    function makeObstMat(hex){
+      return new THREE.MeshStandardMaterial({
+        color: hex, emissive: new THREE.Color(hex), emissiveIntensity: 0.55,
+        roughness: 0.3, metalness: 0.4
+      });
+    }
+    const POOL = 90;
+    const obstacles = [];   // {mesh, active, lane}
+    for (let i = 0; i < POOL; i++) {
+      const m = new THREE.Mesh(obstGeo, makeObstMat(0xff5d6c));
+      m.castShadow = true; m.visible = false; m.position.y = 0.9;
+      scene.add(m);
+      obstacles.push({ mesh: m, active: false, lane: 1 });
+    }
+
+    // collectible orbs (bonus points)
+    const orbGeo = new THREE.IcosahedronGeometry(0.42, 0);
+    const orbMat = new THREE.MeshStandardMaterial({
+      color: 0xfff0a0, emissive: 0xffd36c, emissiveIntensity: 1.2, roughness: 0.2, metalness: 0.3
+    });
+    const orbs = [];
+    for (let i = 0; i < 24; i++) {
+      const m = new THREE.Mesh(orbGeo, orbMat);
+      m.visible = false; m.position.y = 1.0; scene.add(m);
+      orbs.push({ mesh: m, active: false, lane: 1, spin: 0 });
+    }
+
+    // ---------------------------------------------------------------- particles
+    const sparkGeo = new THREE.SphereGeometry(0.09, 6, 6);
+    const sparks = [];
+    function burst(x, y, z, hex, n = 16){
+      const m = new THREE.MeshBasicMaterial({ color: hex });
+      for (let i = 0; i < n; i++){
+        const s = new THREE.Mesh(sparkGeo, m); s.position.set(x, y, z);
+        scene.add(s);
+        sparks.push({ mesh: s, vx: srange(-0.18, 0.18), vy: srange(0.04, 0.24),
+          vz: srange(-0.18, 0.18), life: 30 });
+      }
+    }
+
+    // ---------------------------------------------------------------- game state
+    let lane, targetX, speed, dist, score, over, paused, started;
+    let spawnTimer, level, gameTime;
+
+    function setPill(){ scoreEl.textContent = score; }
+
+    function freeAll(){
+      for (const o of obstacles){ o.active = false; o.mesh.visible = false; }
+      for (const o of orbs){ o.active = false; o.mesh.visible = false; }
+      for (let i = sparks.length - 1; i >= 0; i--){ scene.remove(sparks[i].mesh); }
+      sparks.length = 0;
+    }
+
+    function reset(){
+      seed = 0x1A2B3C4D >>> 0;
+      lane = 1; targetX = LANES[lane];
+      speed = 0.42; dist = 0; score = 0; level = 1; gameTime = 0;
+      over = false; paused = false; started = true;
+      spawnTimer = 0;
+      player.position.set(LANES[lane], 0.7, PLAYER_Z);
+      player.rotation.set(0, 0, 0);
+      freeAll();
+      setPill();
+      over_el.classList.remove('gx-show');
+    }
+
+    function showFlash(txt){
+      flashEl.textContent = txt;
+      flashEl.classList.add('show');
+      clearTimeout(showFlash._t);
+      showFlash._t = setTimeout(() => flashEl.classList.remove('show'), 900);
+    }
+
+    const over_el = document.getElementById('over');
+    const overTitle = document.getElementById('overTitle');
+    const againLabel = document.getElementById('againLabel');
+
+    function end(){
+      if (over) return;
+      over = true; started = false;
+      const isBest = score > best;
+      if (isBest){ best = score; localStorage.setItem(BEST_KEY, best); bestEl.textContent = best; }
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('bestScore').textContent = best;
+      document.getElementById('newBest').textContent = (isBest && score > 0) ? 'New best!' : '';
+      overTitle.textContent = 'Game over';
+      againLabel.textContent = 'Play again';
+      over_el.classList.add('gx-show');
+      burst(player.position.x, player.position.y, player.position.z, 0xff5d6c, 30);
+    }
+
+    function togglePause(){
+      if (over || !started) return;
+      paused = !paused;
+      if (paused){
+        overTitle.textContent = 'Paused';
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('bestScore').textContent = best;
+        document.getElementById('newBest').textContent = '';
+        againLabel.textContent = 'Resume';
+        over_el.classList.add('gx-show');
+      } else {
+        over_el.classList.remove('gx-show');
+      }
+    }
+
+    function primaryAction(){
+      if (paused){ togglePause(); return; }
+      reset();
+    }
+
+    // ---------------------------------------------------------------- lane movement
+    function moveLane(dir){
+      if (over || paused || !started) return;
+      const next = Math.max(0, Math.min(LANES.length - 1, lane + dir));
+      if (next === lane) return;
+      lane = next; targetX = LANES[lane];
+    }
+
+    // ---------------------------------------------------------------- spawning
+    function spawnRow(){
+      // pick 1-2 blocked lanes, never block all three.
+      const blocked = new Set();
+      const count = srnd() < 0.32 + Math.min(0.28, level * 0.03) ? 2 : 1;
+      while (blocked.size < count){ blocked.add(Math.floor(srnd() * 3)); }
+      if (blocked.size >= 3) blocked.delete(Math.floor(srnd() * 3));
+      for (let l = 0; l < 3; l++){
+        if (!blocked.has(l)) continue;
+        const o = obstacles.find(x => !x.active);
+        if (!o) continue;
+        o.active = true; o.lane = l;
+        o.mesh.visible = true;
+        o.mesh.material = makeObstMat(spick(OBST_COLORS));
+        o.mesh.position.set(LANES[l], 0.9, SPAWN_Z);
+        o.mesh.rotation.set(srange(0, 6.28), srange(0, 6.28), 0);
+      }
+      // sometimes drop a bonus orb in a free lane
+      if (srnd() < 0.45){
+        const freeLanes = [0, 1, 2].filter(l => !blocked.has(l));
+        const l = spick(freeLanes);
+        const orb = orbs.find(x => !x.active);
+        if (orb){
+          orb.active = true; orb.lane = l;
+          orb.mesh.visible = true;
+          orb.mesh.position.set(LANES[l], 1.0, SPAWN_Z - 6);
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------- input
+    onDrag(renderer.domElement, {
+      start: (e) => { onDrag._x0 = e.x; },
+      move: (e) => {
+        // lane switch when horizontal drag crosses a threshold
+        if (onDrag._x0 == null) onDrag._x0 = e.x;
+        const total = e.x - onDrag._x0;
+        if (total > 42){ moveLane(1); onDrag._x0 = e.x; }
+        else if (total < -42){ moveLane(-1); onDrag._x0 = e.x; }
+      },
+      end: () => { onDrag._x0 = null; }
+    });
+    // also support a flick swipe as a fallback
+    onSwipe(renderer.domElement, (d) => {
+      if (d === 'left') moveLane(-1);
+      else if (d === 'right') moveLane(1);
+    }, 36);
+    // tap restarts when game is over
+    renderer.domElement.addEventListener('pointerup', () => {
+      if (over) primaryAction();
+    });
+
+    const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
+      'a','d','w','s','A','D','W','S','p','P','r','R'];
+    addEventListener('keydown', (e) => {
+      const k = e.key;
+      if (GAME_KEYS.includes(k)) e.preventDefault();
+      if (k === 'r' || k === 'R'){ reset(); return; }
+      if (k === 'p' || k === 'P'){ togglePause(); return; }
+      if (k === 'ArrowLeft'  || k === 'a' || k === 'A'){ moveLane(-1); return; }
+      if (k === 'ArrowRight' || k === 'd' || k === 'D'){ moveLane(1);  return; }
+      if (k === ' ' || k === 'Enter'){
+        if (over || paused) primaryAction();
+        return;
+      }
+    });
+    document.getElementById('again').addEventListener('click', (e) => {
+      e.stopPropagation(); primaryAction();
+    });
+
+    // ---------------------------------------------------------------- resize
+    function resize(){
+      const w = innerWidth, h = innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+    addEventListener('resize', resize); resize();
+
+    // ---------------------------------------------------------------- collision
+    function hits(ax, az, bx, bz, rx, rz){
+      return Math.abs(ax - bx) < rx && Math.abs(az - bz) < rz;
+    }
+
+    // ---------------------------------------------------------------- loop
+    let t = 0;
+    function animate(){
+      requestAnimationFrame(animate);
+      t += 1;
+
+      if (started && !over && !paused){
+        gameTime += 1;
+
+        // speed ramps over time + level-up flashes
+        const newLevel = 1 + Math.floor(dist / 220);
+        if (newLevel > level){
+          level = newLevel;
+          speed = Math.min(1.15, 0.42 + (level - 1) * 0.08);
+          showFlash('Speed up · Lv ' + level);
+        }
+
+        dist += speed;
+        // distance + survival score
+        score = Math.floor(dist) ;
+        setPill();
+
+        // scroll the floor + rails texture for a sense of motion
+        gridTex.offset.y -= speed * 0.025;
+
+        // spawn cadence shortens as speed grows
+        spawnTimer -= speed;
+        const spawnGap = Math.max(7.5, 16 - level * 0.8);
+        if (spawnTimer <= 0){ spawnRow(); spawnTimer = spawnGap; }
+
+        // smooth lane glide + a little tilt/squash for juice
+        player.position.x += (targetX - player.position.x) * 0.28;
+        const tilt = (targetX - player.position.x) * 0.5;
+        player.rotation.z = tilt;
+        player.rotation.x = Math.sin(t * 0.18) * 0.05;
+        player.position.y = 0.7 + Math.abs(Math.sin(t * 0.16)) * 0.06;
+        halo.rotation.y += 0.04; halo.rotation.x += 0.02;
+
+        // move obstacles toward the camera
+        for (const o of obstacles){
+          if (!o.active) continue;
+          o.mesh.position.z += speed;
+          o.mesh.rotation.x += 0.02; o.mesh.rotation.y += 0.015;
+          // collision when near player z
+          if (hits(player.position.x, PLAYER_Z, o.mesh.position.x, o.mesh.position.z, 1.3, 1.3)){
+            end();
+          }
+          if (o.mesh.position.z > DESPAWN_Z){ o.active = false; o.mesh.visible = false; }
+        }
+
+        // move + collect orbs
+        for (const o of orbs){
+          if (!o.active) continue;
+          o.mesh.position.z += speed;
+          o.spin += 0.08; o.mesh.rotation.y = o.spin; o.mesh.rotation.x = o.spin * 0.6;
+          o.mesh.position.y = 1.0 + Math.sin(t * 0.1 + o.lane) * 0.12;
+          if (hits(player.position.x, PLAYER_Z, o.mesh.position.x, o.mesh.position.z, 1.0, 1.0)){
+            o.active = false; o.mesh.visible = false;
+            dist += 25; // bonus distance => bonus score
+            burst(o.mesh.position.x, o.mesh.position.y, o.mesh.position.z, 0xffd36c, 14);
+          }
+          if (o.mesh.position.z > DESPAWN_Z){ o.active = false; o.mesh.visible = false; }
+        }
+
+        accentLight.intensity = 2.0 + Math.sin(t * 0.2) * 0.4;
+      }
+
+      // particles always update (so the death burst animates on the modal)
+      for (let i = sparks.length - 1; i >= 0; i--){
+        const s = sparks[i];
+        s.mesh.position.x += s.vx; s.mesh.position.y += s.vy; s.mesh.position.z += s.vz;
+        s.vy -= 0.014; s.life--;
+        if (s.life <= 0){ scene.remove(s.mesh); sparks.splice(i, 1); }
+      }
+
+      // gentle camera sway following the player
+      camera.position.x += (player.position.x * 0.32 - camera.position.x) * 0.06;
+      camera.lookAt(player.position.x * 0.3, 1.0, -18);
+
+      renderer.render(scene, camera);
+    }
+
+    reset(); animate();
+  </script>
+</body>
+</html>
