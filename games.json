@@ -3,6 +3,16 @@
   "title": "3D",
   "games": [
     {
+      "slug": "stack",
+      "title": "Stack",
+      "path": "games/stack/",
+      "icon": "🧱",
+      "dims": "3D",
+      "tags": ["tap", "tower", "three.js"],
+      "license": "MIT",
+      "credit": "Gamf · stack-tower design"
+    },
+    {
       "slug": "sample-cube",
       "title": "Spin Cube",
       "path": "games/sample-cube/",

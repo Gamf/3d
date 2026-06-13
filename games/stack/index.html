@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0f13">
+  <title>Stack — Gamf</title>
+  <style>
+    *{box-sizing:border-box} html,body{margin:0;height:100%;overflow:hidden;background:#0e0f13;color:#f2f3f5;
+      font-family:system-ui,sans-serif;-webkit-tap-highlight-color:transparent;touch-action:none;
+      -webkit-user-select:none;user-select:none}
+    .hud{position:fixed;top:env(safe-area-inset-top);left:0;right:0;display:flex;gap:16px;
+      padding:12px 16px;align-items:center;pointer-events:none;z-index:2}
+    .hud a{color:#6c8cff;text-decoration:none;font-size:.9rem;pointer-events:auto}
+    .hud .sc{margin-left:auto;font-weight:800;font-size:1.4rem}
+    .hint{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 18px);left:0;right:0;text-align:center;
+      color:#7d8493;font-size:.9rem;z-index:2;pointer-events:none}
+    .over{position:fixed;inset:0;display:none;place-items:center;background:rgba(8,9,13,.7);z-index:3;text-align:center}
+    .over.show{display:grid} .over h2{margin:0 0 6px} .over button{all:unset;margin-top:14px;color:#0e0f13;
+      background:#5ad1a8;font-weight:700;padding:12px 22px;border-radius:12px;cursor:pointer}
+    canvas{display:block;width:100%;height:100%}
+  </style>
+</head>
+<body>
+  <div class="hud"><a href="../../">← 3D</a><span class="sc" id="score">0</span></div>
+  <div class="hint">Tap anywhere to drop the block</div>
+  <div class="over" id="over"><div><h2>Nice stack!</h2><div>Height <b id="finalScore">0</b></div>
+    <button id="again">Play again</button></div></div>
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    const renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+    document.body.appendChild(renderer.domElement);
+
+    const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0e0f13);
+    const D=8; let camera;
+    function makeCamera(){ const a=innerWidth/innerHeight;
+      camera=new THREE.OrthographicCamera(-D*a,D*a,D,-D,-50,100);
+      camera.position.set(10,10,10); camera.lookAt(0,0,0); }
+    makeCamera();
+    scene.add(new THREE.HemisphereLight(0xffffff,0x223344,1.0));
+    const dir=new THREE.DirectionalLight(0xffffff,0.7); dir.position.set(6,12,4); scene.add(dir);
+
+    const H=1;                                   // block height
+    let stack, current, dropped, score, axis, dirSign, speed, over, camTargetY;
+
+    function colorFor(i){ const h=(i*8+200)%360; return new THREE.Color(`hsl(${h},55%,58%)`); }
+    function addLayer(x,z,w,d,i){ const g=new THREE.BoxGeometry(w,H,d);
+      const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:colorFor(i)}));
+      m.position.set(x,i*H,z); scene.add(m); return {mesh:m,x,z,w,d}; }
+
+    function reset(){ over=false; score=0; document.getElementById('score').textContent=0;
+      document.getElementById('over').classList.remove('show');
+      [...scene.children].forEach(o=>{ if(o.isMesh) scene.remove(o); });
+      scene.add(dir);
+      stack=[ addLayer(0,0,6,6,0) ]; camTargetY=0; axis='x'; spawnMoving(); }
+
+    function spawnMoving(){ const top=stack[stack.length-1]; const i=stack.length;
+      const w=top.w, d=top.d; dirSign=1; speed=0.10+Math.min(0.10,i*0.004);
+      const startX = axis==='x' ? -8 : top.x;
+      const startZ = axis==='z' ? -8 : top.z;
+      current=addLayer(startX,startZ,w,d,i); current.moving=true; }
+
+    function drop(){ if(over||!current) return; const top=stack[stack.length-1]; const i=stack.length;
+      let overlap, newW=current.w, newD=current.d, nx=current.x, nz=current.z;
+      if(axis==='x'){ const delta=current.x-top.x; overlap=current.w-Math.abs(delta);
+        if(overlap<=0) return end(); newW=overlap; nx=top.x+delta/2; }
+      else { const delta=current.z-top.z; overlap=current.d-Math.abs(delta);
+        if(overlap<=0) return end(); newD=overlap; nz=top.z+delta/2; }
+      // resize placed block to the overlapping part
+      scene.remove(current.mesh);
+      const placed=addLayer(nx,nz,newW,newD,i);
+      stack.push(placed); current=null;
+      score++; document.getElementById('score').textContent=score;
+      camTargetY=i*H; axis = axis==='x' ? 'z' : 'x'; spawnMoving();
+    }
+
+    function end(){ over=true; current=null; document.getElementById('finalScore').textContent=score;
+      document.getElementById('over').classList.add('show'); }
+
+    function resize(){ renderer.setSize(innerWidth,innerHeight); makeCamera(); }
+    addEventListener('resize',resize); resize();
+
+    addEventListener('pointerup',()=>{ if(over) return; drop(); });
+    document.getElementById('again').onclick=(e)=>{ e.stopPropagation(); reset(); };
+
+    function animate(){
+      if(current&&current.moving&&!over){ const lim=8;
+        if(axis==='x'){ current.x+=dirSign*speed; if(Math.abs(current.x)>lim) dirSign*=-1; current.mesh.position.x=current.x; }
+        else { current.z+=dirSign*speed; if(Math.abs(current.z)>lim) dirSign*=-1; current.mesh.position.z=current.z; } }
+      // smooth camera rise
+      const cy=camera.position.y; const want=10+camTargetY;
+      camera.position.y += (want-cy)*0.1; camera.lookAt(0,camTargetY,0);
+      renderer.render(scene,camera); requestAnimationFrame(animate);
+    }
+    reset(); animate();
+  </script>
+</body>
+</html>
