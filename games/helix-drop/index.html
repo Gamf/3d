@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0f13">
+  <title>Helix Drop — Gamf</title>
+  <style>
+    *{box-sizing:border-box} html,body{margin:0;height:100%;overflow:hidden;background:#0e0f13;color:#f2f3f5;
+      font-family:system-ui,sans-serif;-webkit-tap-highlight-color:transparent;touch-action:none;
+      -webkit-user-select:none;user-select:none}
+    .hud{position:fixed;top:env(safe-area-inset-top);left:0;right:0;display:flex;gap:14px;align-items:center;
+      padding:12px 16px;z-index:2;pointer-events:none}
+    .hud a{color:#6c8cff;text-decoration:none;font-size:.9rem;pointer-events:auto}
+    .hud .sc{margin-left:auto;font-weight:800;font-size:1.6rem;text-shadow:0 0 16px rgba(90,209,168,.55)}
+    .hud .best{color:#9aa3b5;font-size:.85rem;font-weight:600}
+    .combo{position:fixed;top:calc(env(safe-area-inset-top) + 48px);left:0;right:0;text-align:center;z-index:2;
+      pointer-events:none;color:#ffd36c;font-weight:700;font-size:1.05rem;opacity:0;transition:opacity .2s}
+    .combo.show{opacity:1}
+    .hint{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 18px);left:0;right:0;text-align:center;
+      color:#7d8493;font-size:.85rem;z-index:2;pointer-events:none}
+    .paused{position:fixed;inset:0;display:none;place-items:center;z-index:3;font-size:1.4rem;font-weight:700;
+      background:rgba(8,9,13,.5)}
+    .paused.show{display:grid}
+    .over{position:fixed;inset:0;display:none;place-items:center;z-index:4;text-align:center;
+      background:radial-gradient(circle at 50% 35%,rgba(20,24,34,.8),rgba(8,9,13,.93))}
+    .over.show{display:grid} .over h2{margin:0 0 8px;font-size:1.8rem}
+    .over .row{color:#9aa3b5;font-size:.95rem;margin:3px 0} .over .row b{color:#f2f3f5}
+    .over .nb{color:#ffd36c;font-weight:700}
+    .over button{all:unset;margin-top:18px;color:#0e0f13;
+      background:linear-gradient(135deg,#5ad1a8,#3fa8d8);font-weight:700;padding:12px 26px;border-radius:12px;
+      cursor:pointer;box-shadow:0 6px 22px rgba(90,209,168,.3)}
+    canvas{display:block;width:100%;height:100%;touch-action:none}
+  </style>
+</head>
+<body>
+  <div class="hud"><a href="../../">← 3D</a>
+    <span class="sc" id="score">0</span>
+    <span class="best">Best: <b id="best">0</b></span></div>
+  <div class="combo" id="combo"></div>
+  <div class="hint">drag / arrows — rotate tower · P pause · R restart</div>
+  <div class="paused" id="paused">Paused</div>
+  <div class="over" id="over"><div>
+    <h2>Game over</h2>
+    <div class="row">Score <b id="finalScore">0</b></div>
+    <div class="row">Best <b id="bestScore">0</b></div>
+    <div class="row nb" id="newBest" style="display:none">New best!</div>
+    <button id="again">Play again</button></div></div>
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { onDrag } from './touch.js';
+
+    // ---------- seeded LCG ----------
+    let seed=0x9E3779B1>>>0;
+    function srnd(){ seed=(1664525*seed+1013904223)>>>0; return seed/4294967296; }
+    function srange(a,b){ return a+(b-a)*srnd(); }
+
+    // ---------- high score ----------
+    const BEST_KEY='gamf-3d-helix-drop-best';
+    let best=+(localStorage.getItem(BEST_KEY)||0);
+    document.getElementById('best').textContent=best;
+
+    // ---------- renderer / scene ----------
+    const renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+    renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const scene=new THREE.Scene();
+    const bgTex=(()=>{ const c=document.createElement('canvas'); c.width=4; c.height=256;
+      const ctx=c.getContext('2d'); const g=ctx.createLinearGradient(0,0,0,256);
+      g.addColorStop(0,'#1b2740'); g.addColorStop(0.5,'#12141d'); g.addColorStop(1,'#08090d');
+      ctx.fillStyle=g; ctx.fillRect(0,0,4,256);
+      const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; })();
+    scene.background=bgTex;
+    scene.fog=new THREE.Fog(0x0e0f13,16,40);
+
+    const camera=new THREE.PerspectiveCamera(55,1,0.1,200);
+    camera.position.set(0,4,11);
+
+    scene.add(new THREE.HemisphereLight(0xcfe0ff,0x1c2230,0.85));
+    const dir=new THREE.DirectionalLight(0xffffff,1.05); dir.position.set(6,14,8);
+    dir.castShadow=true; dir.shadow.mapSize.set(1024,1024);
+    dir.shadow.camera.near=1; dir.shadow.camera.far=60;
+    dir.shadow.camera.left=-10; dir.shadow.camera.right=10;
+    dir.shadow.camera.top=10; dir.shadow.camera.bottom=-10;
+    scene.add(dir);
+    const rim=new THREE.DirectionalLight(0x6c8cff,0.35); rim.position.set(-8,4,-6); scene.add(rim);
+
+    // ---------- central pole ----------
+    const POLE_R=0.55;
+    const pole=new THREE.Mesh(
+      new THREE.CylinderGeometry(POLE_R,POLE_R,200,24),
+      new THREE.MeshStandardMaterial({color:0x232a3a,roughness:0.6,metalness:0.3,
+        emissive:0x0c1018}));
+    pole.castShadow=true; scene.add(pole);
+
+    // ---------- helix tower ----------
+    // Each "ring" is a disc made of segments. Some segments are gaps (missing),
+    // one or two are "danger" (deadly) when you land on them.
+    const RING_GAP=2.6;        // vertical distance between rings
+    const RING_R=3.2;          // disc radius
+    const SEG=8;               // segments per ring
+    const tower=new THREE.Group(); scene.add(tower); // rotates as a whole
+    const SAFE=0x4ec3ff, DANGER=0xff6f61;
+    const safeMat=new THREE.MeshStandardMaterial({color:SAFE,roughness:0.4,metalness:0.2,
+      emissive:new THREE.Color(SAFE).multiplyScalar(0.12)});
+    const dangerMat=new THREE.MeshStandardMaterial({color:DANGER,roughness:0.35,metalness:0.2,
+      emissive:new THREE.Color(DANGER).multiplyScalar(0.3)});
+
+    const SURF=0.75;   // ball-center rest height above a ring's y (disc top 0.25 + ball r 0.5)
+    let rings=[];   // {group, y, segs:[{mesh,type}], passed}
+    function makeRing(index,y){
+      const grp=new THREE.Group(); grp.position.y=y;
+      const segs=[];
+      const safeStart=index<2;           // first rings: gaps but no danger (gentle opening)
+      // gaps: always at least one gap so the ball can always progress down
+      const gapCount=1+(srnd()<0.4?1:0);
+      const gapStart=Math.floor(srnd()*SEG);
+      const dangerChance=safeStart?0:Math.min(0.42,0.06+index*0.011);
+      const gapSet=new Set();
+      for(let g=0;g<gapCount;g++) gapSet.add((gapStart+g)%SEG);
+      for(let s=0;s<SEG;s++){
+        if(gapSet.has(s)) continue; // gap = nothing
+        const a0=(s/SEG)*Math.PI*2, a1=((s+1)/SEG)*Math.PI*2;
+        const isDanger=srnd()<dangerChance;
+        const geo=new THREE.CylinderGeometry(RING_R,RING_R,0.5,16,1,false,a0,a1-a0);
+        const mesh=new THREE.Mesh(geo,isDanger?dangerMat:safeMat);
+        mesh.castShadow=true; mesh.receiveShadow=true;
+        grp.add(mesh);
+        segs.push({mesh,type:isDanger?'danger':'safe',a0,a1});
+      }
+      tower.add(grp);
+      return {grp,y,segs,passed:false,index};
+    }
+    function buildTower(){
+      rings.forEach(r=>tower.remove(r.grp)); rings=[];
+      for(let i=0;i<TOWER_RINGS;i++) makeRing(i,-i*RING_GAP);
+    }
+    const TOWER_RINGS=80;
+
+    // ---------- ball ----------
+    const ball=new THREE.Mesh(
+      new THREE.SphereGeometry(0.5,24,18),
+      new THREE.MeshStandardMaterial({color:0x5ad1a8,roughness:0.25,metalness:0.35,
+        emissive:new THREE.Color(0x5ad1a8).multiplyScalar(0.35)}));
+    ball.castShadow=true; scene.add(ball);
+    const ballGlow=new THREE.PointLight(0x5ad1a8,1.2,6); scene.add(ballGlow);
+    const BALL_X=RING_R+0.0; // ball sits at the rim of the discs (radius RING_R)
+
+    // ---------- particles ----------
+    const sparkGeo=new THREE.SphereGeometry(0.07,6,6);
+    const sparks=[];
+    function burst(x,y,z,colHex,n=16){
+      const m=new THREE.MeshBasicMaterial({color:colHex});
+      for(let i=0;i<n;i++){ const s=new THREE.Mesh(sparkGeo,m); s.position.set(x,y,z);
+        scene.add(s); sparks.push({mesh:s,vx:srange(-0.12,0.12),vy:srange(0.02,0.16),
+          vz:srange(-0.12,0.12),life:28}); }
+    }
+
+    // ---------- game state ----------
+    let score, combo, vy, ballY, towerRot, over, paused, started;
+    const scoreEl=document.getElementById('score');
+    const comboEl=document.getElementById('combo');
+
+    function showCombo(n){ if(n>=2){ comboEl.textContent='Combo x'+n+'!'; comboEl.classList.add('show');
+      clearTimeout(showCombo._t); showCombo._t=setTimeout(()=>comboEl.classList.remove('show'),700); } }
+
+    function reset(){
+      seed=0x9E3779B1>>>0;
+      score=0; combo=0; vy=0; ballY=SURF+2; towerRot=0; over=false; paused=false; started=true;
+      scoreEl.textContent='0'; comboEl.classList.remove('show');
+      document.getElementById('over').classList.remove('show');
+      document.getElementById('paused').classList.remove('show');
+      tower.rotation.y=0;
+      buildTower();
+      ball.position.set(BALL_X,ballY,0);
+    }
+
+    function end(){ over=true;
+      const isBest=score>best;
+      if(isBest){ best=score; localStorage.setItem(BEST_KEY,best);
+        document.getElementById('best').textContent=best; }
+      document.getElementById('finalScore').textContent=score;
+      document.getElementById('bestScore').textContent=best;
+      document.getElementById('newBest').style.display=isBest&&score>0?'block':'none';
+      document.getElementById('over').classList.add('show');
+      burst(ball.position.x,ball.position.y,ball.position.z,DANGER,26);
+    }
+
+    function togglePause(){ if(over||!started) return; paused=!paused;
+      document.getElementById('paused').classList.toggle('show',paused); }
+
+    // ---------- collision ----------
+    // The ball is fixed in world space at angle 0 (the +X side, z≈0).
+    // The tower rotates by tower.rotation.y. A segment [a0,a1] in local space
+    // occupies world angle [a0+rot, a1+rot]. The ball is at world angle 0.
+    function segmentUnderBall(ring){
+      const TWO=Math.PI*2;
+      // ball is at world angle 0; that maps to local tower angle (-rotation.y).
+      let a=(-tower.rotation.y)%TWO; a=((a%TWO)+TWO)%TWO; // normalize to [0,2π)
+      for(const sg of ring.segs){
+        // segment local range [a0,a1), a0/a1 in [0,2π], a1>a0, never wraps
+        if(a>=sg.a0 && a<sg.a1) return sg;
+      }
+      return null; // gap — ball falls through
+    }
+
+    // ---------- input ----------
+    onDrag(renderer.domElement,{
+      move:({dx})=>{ tower.rotation.y -= dx*0.006; }
+    });
+    const keys={};
+    addEventListener('keydown',(e)=>{
+      const k=e.key;
+      const gameKey=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
+        'a','d','w','s','A','D','W','S','p','P','r','R'].includes(k);
+      if(gameKey) e.preventDefault();
+      if(k==='r'||k==='R'){ reset(); return; }
+      if(k==='p'||k==='P'){ togglePause(); return; }
+      keys[k]=true;
+    });
+    addEventListener('keyup',(e)=>{ keys[e.key]=false; });
+    document.getElementById('again').onclick=(e)=>{ e.stopPropagation(); reset(); };
+
+    function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h);
+      camera.aspect=w/h; camera.updateProjectionMatrix(); }
+    addEventListener('resize',resize); resize();
+
+    // ---------- loop ----------
+    let camY=0;
+    function animate(){
+      requestAnimationFrame(animate);
+      if(!paused && !over){
+        // keyboard rotation
+        const left=keys['ArrowLeft']||keys['a']||keys['A'];
+        const right=keys['ArrowRight']||keys['d']||keys['D'];
+        if(left) tower.rotation.y+=0.05;
+        if(right) tower.rotation.y-=0.05;
+
+        // physics (gravity + sub-stepped so fast falls can't tunnel rings)
+        vy-=0.015;                                  // gravity
+        if(vy<-0.55) vy=-0.55;                      // terminal velocity
+        const steps=Math.max(1,Math.ceil(Math.abs(vy)/0.18));
+        const dy=vy/steps;
+        let hit=false;
+        for(let st=0; st<steps && !over; st++){
+          ballY+=dy;
+          if(vy>=0) continue;                       // only collide while falling
+          // ring directly under the ball center: rest level = -i*RING_GAP + SURF
+          // candidate index just below current ball height
+          const idx=Math.max(0,Math.round((SURF-ballY)/RING_GAP));
+          const ring=rings[idx];
+          if(!ring) continue;
+          const restY=ring.y+SURF;                  // ball-center height when resting on this ring
+          if(ballY<=restY){
+            const sg=segmentUnderBall(ring);
+            if(sg){
+              if(sg.type==='danger'){ ballY=restY; ball.position.set(BALL_X,ballY,0); end(); break; }
+              // bounce on a safe segment
+              ballY=restY; vy=0.24; combo=0; hit=true;
+              burst(BALL_X,restY-0.45,0,SAFE,8);
+              break;
+            } else if(!ring.passed){
+              // gap under the ball → fall through and score
+              ring.passed=true; combo++;
+              const gain=combo>1?combo:1; score+=gain; scoreEl.textContent=score;
+              if(combo>1) showCombo(combo);
+              burst(BALL_X,ring.y,0,0x5ad1a8,combo>1?14:8);
+            }
+          }
+        }
+        if(over){ ball.position.set(BALL_X,ballY,0); return; }
+        // win/loop guard: cleared the whole tower
+        if(ballY < -(TOWER_RINGS-1)*RING_GAP+SURF-0.5){ end(); ball.position.set(BALL_X,ballY,0); return; }
+      }
+
+      // ball world position (fixed angle, follows ballY)
+      ball.position.set(BALL_X,ballY,0);
+      ballGlow.position.set(BALL_X,ballY+0.3,0.4);
+
+      // camera follows ball downward smoothly
+      const wantCamY=ballY+4;
+      camY+=(wantCamY-camY)*0.08;
+      camera.position.y=camY; camera.lookAt(0,camY-4,0);
+      pole.position.y=camY-20; // keep pole centered around view
+
+      // particles
+      for(let i=sparks.length-1;i>=0;i--){ const s=sparks[i];
+        s.mesh.position.x+=s.vx; s.mesh.position.y+=s.vy; s.mesh.position.z+=s.vz; s.vy-=0.012;
+        s.life--; if(s.life<=0){ scene.remove(s.mesh); sparks.splice(i,1); } }
+
+      renderer.render(scene,camera);
+    }
+    reset(); animate();
+  </script>
+</body>
+</html>

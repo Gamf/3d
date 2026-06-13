@@ -3,6 +3,16 @@
   "title": "3D",
   "games": [
     {
+      "slug": "helix-drop",
+      "title": "Helix Drop",
+      "path": "games/helix-drop/",
+      "icon": "🌀",
+      "dims": "3D",
+      "tags": ["drag", "arcade", "three.js"],
+      "license": "MIT",
+      "credit": "Gamf · helix-drop design"
+    },
+    {
       "slug": "stack",
       "title": "Stack",
       "path": "games/stack/",
