@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0f13">
+  <title>Spin Cube — Gamf</title>
+  <style>
+    *{box-sizing:border-box} html,body{margin:0;height:100%;overflow:hidden;background:#0e0f13;color:#f2f3f5;
+      font-family:system-ui,sans-serif;-webkit-tap-highlight-color:transparent;touch-action:none;
+      -webkit-user-select:none;user-select:none}
+    .hud{position:fixed;top:env(safe-area-inset-top);left:0;padding:12px 16px;z-index:2}
+    .hud a{color:#6c8cff;text-decoration:none;font-size:.9rem}
+    canvas{display:block;width:100%;height:100%;touch-action:none}
+  </style>
+</head>
+<body>
+  <div class="hud"><a href="../../">← 3D</a></div>
+  <!-- Three.js via ES module CDN — no build step needed. -->
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { onDrag } from './touch.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0e0f13);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.z = 3.2;
+
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4,1.4,1.4),
+      new THREE.MeshStandardMaterial({ color:0x5ad1a8, roughness:0.35, metalness:0.1 })
+    );
+    scene.add(cube);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.1));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(2,3,4); scene.add(dir);
+
+    function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h);
+      camera.aspect=w/h; camera.updateProjectionMatrix(); }
+    addEventListener('resize', resize); resize();
+
+    // Drag to spin; let go and it keeps a little momentum.
+    let velX=0.004, velY=0.006, dragging=false;
+    onDrag(renderer.domElement, {
+      start:()=>{ dragging=true; },
+      move:({dx,dy})=>{ velY=dx*0.005; velX=dy*0.005; },
+      end:()=>{ dragging=false; }
+    });
+
+    function animate(){
+      cube.rotation.y += velY; cube.rotation.x += velX;
+      if(!dragging){ velX*=0.97; velY*=0.97;
+        if(Math.abs(velX)<0.0005) velX=0.004; if(Math.abs(velY)<0.0005) velY=0.006; }
+      renderer.render(scene,camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>

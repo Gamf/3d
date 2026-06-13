@@ -1,0 +1,16 @@
+{
+  "genre": "3d",
+  "title": "3D",
+  "games": [
+    {
+      "slug": "sample-cube",
+      "title": "Spin Cube",
+      "path": "games/sample-cube/",
+      "icon": "🧊",
+      "dims": "3D",
+      "tags": ["drag", "three.js"],
+      "license": "MIT",
+      "credit": "Gamf sample"
+    }
+  ]
+}
