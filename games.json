@@ -32,6 +32,17 @@
       "tags": ["tap", "tower", "three.js"],
       "license": "MIT",
       "credit": "Gamf · stack-tower design"
+    },
+    {
+      "slug": "marble-maze",
+      "title": "Marble Maze",
+      "path": "games/marble-maze/",
+      "icon": "🔮",
+      "color": "#5ad1a8",
+      "dims": "3D",
+      "tags": ["tilt", "drag", "maze", "three.js"],
+      "license": "MIT",
+      "credit": "Gamf original"
     }
   ]
 }

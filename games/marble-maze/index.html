@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#07080c">
+  <title>Marble Maze — Gamf</title>
+  <meta name="description" content="Tilt the board, roll the marble. Grab every gem, dodge the holes, reach the goal. A 3D tilt-maze.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <style>
+    /* genre accent for this game (3D = mint) */
+    body { --gx-accent: #5ad1a8; }
+    html, body { height: 100%; overflow: hidden; touch-action: none;
+      -webkit-user-select: none; user-select: none; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    /* center toast (level cleared / new level) — purely cosmetic */
+    .mm-flash { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 64px);
+      text-align: center; z-index: 4; pointer-events: none;
+      font-family: var(--gx-font-display); font-weight: 700; font-size: var(--fs-xl);
+      color: var(--gx-accent); text-shadow: 0 0 18px color-mix(in srgb, var(--gx-accent) 70%, transparent);
+      opacity: 0; transform: translateY(-6px); transition: opacity .25s var(--ease), transform .25s var(--ease); }
+    .mm-flash.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> 3D</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Lv <b id="level">1</b></span>
+    <span class="gx-pill">Score <b id="score">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+  </header>
+
+  <!-- level toast -->
+  <div class="mm-flash" id="flash"></div>
+
+  <!-- controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> drag — tilt the board</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-up"/></svg><svg class="gx-ico"><use href="#i-down"/></svg><svg class="gx-ico"><use href="#i-left"/></svg><svg class="gx-ico"><use href="#i-right"/></svg> arrows / WASD</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
+  </div>
+
+  <!-- pause / game-over modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Game over</h2>
+      <div class="gx-modal__row">Score <b id="finalScore">0</b></div>
+      <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { onDrag } from './touch.js';
+
+    // ---------------------------------------------------------------- seeded LCG
+    // No Math.random / Date — fully deterministic maze + visuals.
+    let seed = 0x9E3779B9 >>> 0;
+    function srnd(){ seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; }
+    function sint(n){ return Math.floor(srnd() * n); }
+    function spick(arr){ return arr[Math.floor(srnd() * arr.length)]; }
+
+    // ---------------------------------------------------------------- high score
+    const BEST_KEY = 'gamf-3d-marble-maze-best';
+    let best = +(localStorage.getItem(BEST_KEY) || 0) || 0;
+    const scoreEl = document.getElementById('score');
+    const bestEl  = document.getElementById('best');
+    const levelEl = document.getElementById('level');
+    const flashEl = document.getElementById('flash');
+    bestEl.textContent = best;
+
+    // ---------------------------------------------------------------- board config
+    const N = 11;               // grid cells per side (odd => clean maze)
+    const CELL = 1.0;           // world size of a cell
+    const BOARD = N * CELL;     // full board side length
+    const HALF = BOARD / 2;
+    const WALL_H = 0.7;
+    const WALL_T = 0.16;
+    const BALL_R = 0.3;
+    const ACCENT = 0x5ad1a8;
+    // convert grid (col,row) -> world (x,z). center cell of grid is origin.
+    function gx(c){ return (c - (N - 1) / 2) * CELL; }
+    function gz(r){ return (r - (N - 1) / 2) * CELL; }
+
+    // ---------------------------------------------------------------- renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.16;
+    document.body.appendChild(renderer.domElement);
+
+    // ---------------------------------------------------------------- scene + fog
+    const scene = new THREE.Scene();
+    const BG = 0x05060b;
+    scene.background = new THREE.Color(BG);
+    scene.fog = new THREE.Fog(BG, 18, 46);
+
+    const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 200);
+    // looking down at the board at an angle (distinct from the runner's tunnel cam)
+    camera.position.set(0, 15.5, 11.5);
+    camera.lookAt(0, 0, 0);
+
+    // ---------------------------------------------------------------- lights
+    scene.add(new THREE.HemisphereLight(0x88aaff, 0x0a0c16, 0.6));
+    const key = new THREE.DirectionalLight(0xffffff, 1.1);
+    key.position.set(6, 16, 5);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.near = 1; key.shadow.camera.far = 60;
+    key.shadow.camera.left = -12; key.shadow.camera.right = 12;
+    key.shadow.camera.top = 12; key.shadow.camera.bottom = -12;
+    key.shadow.bias = -0.0006;
+    scene.add(key);
+    const accentLight = new THREE.PointLight(ACCENT, 1.6, 30, 1.5);
+    accentLight.position.set(0, 6, 0);
+    scene.add(accentLight);
+
+    // ---------------------------------------------------------------- the tilting board group
+    // Everything that should tilt together (floor, walls, gems, goal) lives here.
+    const board = new THREE.Group();
+    scene.add(board);
+
+    // floor
+    const floorTex = (() => {
+      const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0c1018'; ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = 'rgba(90,209,168,0.22)'; ctx.lineWidth = 2;
+      const step = 256 / N;
+      for (let i = 0; i <= N; i++){
+        const p = Math.round(i * step) + 0.5;
+        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 256); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(256, p); ctx.stroke();
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const floor = new THREE.Mesh(
+      new THREE.BoxGeometry(BOARD, 0.4, BOARD),
+      new THREE.MeshStandardMaterial({ map: floorTex, color: 0x141a26, roughness: 0.7, metalness: 0.2 })
+    );
+    floor.position.y = -0.2;
+    floor.receiveShadow = true;
+    board.add(floor);
+
+    // outer rim (decorative frame around the play area)
+    const rimMat = new THREE.MeshStandardMaterial({
+      color: 0x0c1420, emissive: new THREE.Color(ACCENT), emissiveIntensity: 0.7,
+      roughness: 0.35, metalness: 0.6
+    });
+    {
+      const long = new THREE.BoxGeometry(BOARD + WALL_T * 2, WALL_H, WALL_T);
+      const side = new THREE.BoxGeometry(WALL_T, WALL_H, BOARD + WALL_T * 2);
+      const offs = HALF + WALL_T / 2;
+      const a = new THREE.Mesh(long, rimMat); a.position.set(0, WALL_H / 2 - 0.05, -offs);
+      const b = new THREE.Mesh(long, rimMat); b.position.set(0, WALL_H / 2 - 0.05,  offs);
+      const c = new THREE.Mesh(side, rimMat); c.position.set(-offs, WALL_H / 2 - 0.05, 0);
+      const d = new THREE.Mesh(side, rimMat); d.position.set( offs, WALL_H / 2 - 0.05, 0);
+      for (const m of [a, b, c, d]){ m.castShadow = true; m.receiveShadow = true; board.add(m); }
+    }
+
+    // ---------------------------------------------------------------- pooled inner walls
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x2a3346, roughness: 0.6, metalness: 0.3 });
+    const wallGeoH = new THREE.BoxGeometry(CELL + WALL_T, WALL_H, WALL_T); // spans a horizontal edge
+    const wallGeoV = new THREE.BoxGeometry(WALL_T, WALL_H, CELL + WALL_T); // spans a vertical edge
+    const WALL_POOL = 220;
+    const wallMeshes = [];
+    for (let i = 0; i < WALL_POOL; i++){
+      const m = new THREE.Mesh(wallGeoH, wallMat);
+      m.castShadow = true; m.receiveShadow = true; m.visible = false;
+      board.add(m); wallMeshes.push(m);
+    }
+    let wallSegs = []; // active wall segments for collision {x,z,horiz}
+
+    // ---------------------------------------------------------------- holes (visual + logic)
+    const holeMat = new THREE.MeshStandardMaterial({ color: 0x05070c, roughness: 1, metalness: 0 });
+    const holeRing = new THREE.MeshStandardMaterial({
+      color: 0x1a0d12, emissive: 0xff5d6c, emissiveIntensity: 0.9, roughness: 0.4, metalness: 0.3
+    });
+    const holeGeo = new THREE.CylinderGeometry(BALL_R + 0.16, BALL_R + 0.16, 0.42, 20);
+    const ringGeo = new THREE.TorusGeometry(BALL_R + 0.2, 0.05, 8, 24);
+    const HOLE_POOL = 26;
+    const holes = []; // {group, x, z, active}
+    for (let i = 0; i < HOLE_POOL; i++){
+      const g = new THREE.Group();
+      const hole = new THREE.Mesh(holeGeo, holeMat); hole.position.y = -0.18;
+      const ring = new THREE.Mesh(ringGeo, holeRing); ring.rotation.x = Math.PI / 2; ring.position.y = 0.01;
+      g.add(hole); g.add(ring); g.visible = false;
+      board.add(g);
+      holes.push({ group: g, ring, x: 0, z: 0, active: false });
+    }
+
+    // ---------------------------------------------------------------- gems
+    const gemGeo = new THREE.OctahedronGeometry(0.26, 0);
+    const gemMat = new THREE.MeshStandardMaterial({
+      color: 0xfff0a0, emissive: 0xffd36c, emissiveIntensity: 1.1, roughness: 0.2, metalness: 0.4
+    });
+    const GEM_POOL = 18;
+    const gems = []; // {mesh, x, z, active}
+    for (let i = 0; i < GEM_POOL; i++){
+      const m = new THREE.Mesh(gemGeo, gemMat); m.castShadow = true; m.visible = false;
+      board.add(m); gems.push({ mesh: m, x: 0, z: 0, active: false });
+    }
+
+    // ---------------------------------------------------------------- goal pad
+    const goalMat = new THREE.MeshStandardMaterial({
+      color: 0x0c2018, emissive: new THREE.Color(ACCENT), emissiveIntensity: 1.3, roughness: 0.3, metalness: 0.4
+    });
+    const goal = new THREE.Mesh(new THREE.CylinderGeometry(BALL_R + 0.26, BALL_R + 0.26, 0.12, 24), goalMat);
+    goal.position.y = 0.02; goal.visible = false;
+    board.add(goal);
+    const goalRing = new THREE.Mesh(new THREE.TorusGeometry(BALL_R + 0.34, 0.05, 8, 28), goalMat);
+    goalRing.rotation.x = Math.PI / 2; goalRing.position.y = 0.12; goalRing.visible = false;
+    board.add(goalRing);
+    let goalX = 0, goalZ = 0;
+
+    // ---------------------------------------------------------------- the marble
+    // Marble lives in world space (its visual y dips when it falls into a hole),
+    // but its x/z are board-local coordinates. We render it inside `board` so it
+    // tilts/rotates with the maze visually.
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(BALL_R, 28, 28),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: new THREE.Color(ACCENT), emissiveIntensity: 0.35,
+        roughness: 0.15, metalness: 0.7
+      })
+    );
+    ball.castShadow = true;
+    board.add(ball);
+    const ballLight = new THREE.PointLight(ACCENT, 0.9, 5, 2);
+    ball.add(ballLight);
+
+    // ---------------------------------------------------------------- particles
+    const sparkGeo = new THREE.SphereGeometry(0.06, 6, 6);
+    const sparks = [];
+    function burst(x, y, z, hex, n = 14){
+      const m = new THREE.MeshBasicMaterial({ color: hex });
+      for (let i = 0; i < n; i++){
+        const s = new THREE.Mesh(sparkGeo, m); s.position.set(x, y, z);
+        board.add(s);
+        sparks.push({ mesh: s,
+          vx: (srnd() - 0.5) * 0.24, vy: srnd() * 0.22 + 0.04, vz: (srnd() - 0.5) * 0.24, life: 28 });
+      }
+    }
+
+    // ---------------------------------------------------------------- maze generation
+    // Recursive-backtracker on an (N x N) grid of cells with walls between cells.
+    // We track, for each cell, whether walls exist to the right (E) and down (S).
+    // Then we remove a passage between adjacent cells when carved.
+    function buildMaze(){
+      const cells = N;
+      // wall presence: vEdge[r][c] = wall on the WEST side of cell (c,r) (vertical wall)
+      //                hEdge[r][c] = wall on the NORTH side of cell (c,r) (horizontal wall)
+      // We instead carve a perfect maze and store passages.
+      const visited = Array.from({ length: cells }, () => new Array(cells).fill(false));
+      // walls between neighbours: store as set keyed "ar,ac-br,bc"; default all walls up
+      const open = new Set(); // pairs that are open (no wall)
+      const keyOf = (ar, ac, br, bc) => ar < br || (ar === br && ac < bc)
+        ? ar + ',' + ac + '_' + br + ',' + bc
+        : br + ',' + bc + '_' + ar + ',' + ac;
+      const stack = [[0, 0]];
+      visited[0][0] = true;
+      const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+      while (stack.length){
+        const [r, c] = stack[stack.length - 1];
+        // gather unvisited neighbours
+        const opts = [];
+        for (const [dr, dc] of dirs){
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nc < 0 || nr >= cells || nc >= cells) continue;
+          if (!visited[nr][nc]) opts.push([nr, nc]);
+        }
+        if (opts.length === 0){ stack.pop(); continue; }
+        const [nr, nc] = opts[sint(opts.length)];
+        visited[nr][nc] = true;
+        open.add(keyOf(r, c, nr, nc));
+        stack.push([nr, nc]);
+      }
+      // braid a little: remove some extra walls so it's not a single forced path
+      const extra = 10 + level * 2;
+      for (let i = 0; i < extra; i++){
+        const r = sint(cells), c = sint(cells);
+        const [dr, dc] = spick(dirs);
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nc < 0 || nr >= cells || nc >= cells) continue;
+        open.add(keyOf(r, c, nr, nc));
+      }
+
+      // ---- realise walls into pooled meshes ----
+      // A wall sits on the edge between two cells. Wall world-position = midpoint.
+      wallSegs = [];
+      let used = 0;
+      const place = (x, z, horiz) => {
+        if (used >= WALL_POOL) return;
+        const m = wallMeshes[used++];
+        m.geometry = horiz ? wallGeoH : wallGeoV;
+        m.position.set(x, WALL_H / 2 - 0.05, z);
+        m.visible = true;
+        wallSegs.push({ x, z, horiz });
+      };
+      // vertical walls: between cell (r,c) and (r,c+1) when NOT open
+      for (let r = 0; r < cells; r++){
+        for (let c = 0; c < cells - 1; c++){
+          if (!open.has(keyOf(r, c, r, c + 1))){
+            const x = (gx(c) + gx(c + 1)) / 2;
+            place(x, gz(r), false);
+          }
+        }
+      }
+      // horizontal walls: between cell (r,c) and (r+1,c) when NOT open
+      for (let r = 0; r < cells - 1; r++){
+        for (let c = 0; c < cells; c++){
+          if (!open.has(keyOf(r, c, r + 1, c))){
+            const z = (gz(r) + gz(r + 1)) / 2;
+            place(gx(c), z, true);
+          }
+        }
+      }
+      for (let i = used; i < WALL_POOL; i++) wallMeshes[i].visible = false;
+
+      return { cells, open, keyOf, visited };
+    }
+
+    // ---------------------------------------------------------------- game state
+    let level, score, over, paused, started, won;
+    let tiltX, tiltZ;            // current board tilt (radians), driven by input
+    let inTiltX, inTiltZ;        // input target tilt
+    let velX, velZ;             // marble velocity (board-local)
+    let posX, posZ;             // marble position (board-local, x & z)
+    let gemsLeft;
+    let fallT;                  // >0 while marble is dropping into a hole
+    const MAX_TILT = 0.32;       // radians
+
+    const over_el = document.getElementById('over');
+    const overTitle = document.getElementById('overTitle');
+    const againLabel = document.getElementById('againLabel');
+
+    function showFlash(txt){
+      flashEl.textContent = txt;
+      flashEl.classList.add('show');
+      clearTimeout(showFlash._t);
+      showFlash._t = setTimeout(() => flashEl.classList.remove('show'), 1100);
+    }
+
+    // place gems / holes / goal for the current level (deterministic from seed)
+    function populate(){
+      const cells = N;
+      // goal: a random cell in the far quadrant from start (0,0 area).
+      const gc = cells - 1 - sint(2);
+      const gr = cells - 1 - sint(2);
+      goalX = gx(gc); goalZ = gz(gr);
+      goal.position.set(goalX, 0.02, goalZ); goal.visible = true;
+      goalRing.position.set(goalX, 0.12, goalZ); goalRing.visible = true;
+
+      // gems: scatter in cells, never on start or goal
+      const nGems = Math.min(GEM_POOL, 4 + level);
+      const taken = new Set(['0,0', gr + ',' + gc]);
+      gemsLeft = 0;
+      let gi = 0;
+      let guard = 0;
+      while (gi < nGems && guard < 400){
+        guard++;
+        const r = sint(cells), c = sint(cells);
+        const k = r + ',' + c;
+        if (taken.has(k)) continue;
+        taken.add(k);
+        const g = gems[gi++];
+        g.x = gx(c); g.z = gz(r); g.active = true;
+        g.mesh.position.set(g.x, 0.4, g.z); g.mesh.visible = true;
+        gemsLeft++;
+      }
+      for (let i = gi; i < GEM_POOL; i++){ gems[i].active = false; gems[i].mesh.visible = false; }
+
+      // holes: scatter, never on start / goal / adjacent-to-start
+      const nHoles = Math.min(HOLE_POOL, 3 + level * 2);
+      let hi = 0;
+      guard = 0;
+      while (hi < nHoles && guard < 600){
+        guard++;
+        const r = sint(cells), c = sint(cells);
+        const k = r + ',' + c;
+        if (taken.has(k)) continue;
+        if (r + c < 2) continue; // keep the start cell + its neighbours clear
+        taken.add(k);
+        const h = holes[hi++];
+        h.x = gx(c); h.z = gz(r); h.active = true;
+        h.group.position.set(h.x, 0, h.z); h.group.visible = true;
+      }
+      for (let i = hi; i < HOLE_POOL; i++){ holes[i].active = false; holes[i].group.visible = false; }
+    }
+
+    function loadLevel(){
+      // deterministic per-level seed derived from the base seed + level
+      seed = (0x9E3779B9 ^ (level * 0x85EBCA6B)) >>> 0;
+      buildMaze();
+      populate();
+      // marble starts in the (0,0) cell
+      posX = gx(0); posZ = gz(0);
+      velX = 0; velZ = 0;
+      fallT = 0; won = false;
+      ball.position.set(posX, BALL_R, posZ);
+      ball.rotation.set(0, 0, 0);
+    }
+
+    function newGame(){
+      level = 1; score = 0;
+      over = false; paused = false; started = true;
+      tiltX = tiltZ = inTiltX = inTiltZ = 0;
+      board.rotation.set(0, 0, 0);
+      // clear particles
+      for (let i = sparks.length - 1; i >= 0; i--) board.remove(sparks[i].mesh);
+      sparks.length = 0;
+      loadLevel();
+      levelEl.textContent = level;
+      scoreEl.textContent = score;
+      over_el.classList.remove('gx-show');
+    }
+
+    function nextLevel(){
+      score += 100;                 // level-clear bonus
+      level++;
+      levelEl.textContent = level;
+      scoreEl.textContent = score;
+      showFlash('Level ' + level);
+      tiltX = tiltZ = inTiltX = inTiltZ = 0;
+      loadLevel();
+    }
+
+    function end(reason){
+      if (over) return;
+      over = true; started = false;
+      const isBest = score > best;
+      if (isBest){ best = score; localStorage.setItem(BEST_KEY, best); bestEl.textContent = best; }
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('bestScore').textContent = best;
+      document.getElementById('newBest').textContent = (isBest && score > 0) ? 'New best!' : '';
+      overTitle.textContent = reason || 'Game over';
+      againLabel.textContent = 'Play again';
+      over_el.classList.add('gx-show');
+    }
+
+    function togglePause(){
+      if (over || !started) return;
+      paused = !paused;
+      if (paused){
+        overTitle.textContent = 'Paused';
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('bestScore').textContent = best;
+        document.getElementById('newBest').textContent = '';
+        againLabel.textContent = 'Resume';
+        over_el.classList.add('gx-show');
+      } else {
+        over_el.classList.remove('gx-show');
+      }
+    }
+
+    function primaryAction(){
+      if (paused){ togglePause(); return; }
+      if (over){ newGame(); return; }
+      newGame();
+    }
+
+    // ---------------------------------------------------------------- input: tilt
+    // Drag = set a target tilt proportional to drag distance from press point.
+    let dragOX = null, dragOZ = null;
+    onDrag(renderer.domElement, {
+      start: (e) => { dragOX = e.x; dragOZ = e.y; },
+      move: (e) => {
+        if (over || paused || !started) return;
+        if (dragOX == null){ dragOX = e.x; dragOZ = e.y; }
+        const dx = (e.x - dragOX) / 140;
+        const dy = (e.y - dragOZ) / 140;
+        inTiltZ = Math.max(-1, Math.min(1, dx)) * MAX_TILT;   // tilt around z => roll in x
+        inTiltX = Math.max(-1, Math.min(1, dy)) * MAX_TILT;   // tilt around x => roll in z
+      },
+      end: () => { dragOX = dragOZ = null; inTiltX = 0; inTiltZ = 0; }
+    });
+    renderer.domElement.addEventListener('pointerup', () => { if (over) primaryAction(); });
+
+    // ---------------------------------------------------------------- input: keyboard
+    const keys = Object.create(null);
+    const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
+      'a','d','w','s','A','D','W','S','p','P','r','R'];
+    addEventListener('keydown', (e) => {
+      const k = e.key;
+      if (GAME_KEYS.includes(k)) e.preventDefault();
+      if (e.repeat) return;
+      if (k === 'r' || k === 'R'){ newGame(); return; }
+      if (k === 'p' || k === 'P'){ togglePause(); return; }
+      if (k === ' ' || k === 'Enter'){
+        if (over || paused){ primaryAction(); }
+        return;
+      }
+      const kl = k.length === 1 ? k.toLowerCase() : k;
+      keys[kl] = true;
+    });
+    addEventListener('keyup', (e) => {
+      const k = e.key;
+      const kl = k.length === 1 ? k.toLowerCase() : k;
+      keys[kl] = false;
+    });
+    document.getElementById('again').addEventListener('click', (e) => {
+      e.stopPropagation(); primaryAction();
+    });
+
+    function keyTilt(){
+      // keyboard overrides input tilt while keys are held
+      let kx = 0, kz = 0;
+      if (keys['arrowup'] || keys['w']) kz -= 1;
+      if (keys['arrowdown'] || keys['s']) kz += 1;
+      if (keys['arrowleft'] || keys['a']) kx -= 1;
+      if (keys['arrowright'] || keys['d']) kx += 1;
+      if (kx || kz){
+        inTiltZ = kx * MAX_TILT;
+        inTiltX = kz * MAX_TILT;
+      } else if (dragOX == null){
+        // neither keys nor active drag => relax to flat
+        inTiltZ *= 0.0; inTiltX *= 0.0;
+      }
+    }
+
+    // ---------------------------------------------------------------- resize
+    function resize(){
+      const w = innerWidth, h = innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+      // keep the whole board comfortably in frame on tall/narrow screens
+      const fit = Math.max(1, (BOARD + 3) / (w / h) / 12);
+      camera.position.set(0, 15.5 * fit, 11.5 * fit);
+      camera.lookAt(0, 0, 0);
+    }
+    addEventListener('resize', resize); resize();
+
+    // ---------------------------------------------------------------- physics step
+    const ACCEL = 0.022;        // gravity-along-tilt strength
+    const FRICT = 0.965;        // rolling friction
+    const BOUNCE = 0.35;        // wall restitution
+    const PLAY = HALF - WALL_T / 2 - BALL_R; // clamp range inside the rim
+
+    function resolveWalls(){
+      // Treat each wall segment as a thin AABB; push the marble out + reflect.
+      for (const s of wallSegs){
+        const halfL = (CELL + WALL_T) / 2;
+        const hx = s.horiz ? halfL : WALL_T / 2;
+        const hz = s.horiz ? WALL_T / 2 : halfL;
+        const dx = posX - s.x;
+        const dz = posZ - s.z;
+        const ox = (hx + BALL_R) - Math.abs(dx); // overlap on x
+        const oz = (hz + BALL_R) - Math.abs(dz); // overlap on z
+        if (ox > 0 && oz > 0){
+          // push out along the axis of least penetration
+          if (ox < oz){
+            posX += (dx < 0 ? -ox : ox);
+            velX = -velX * BOUNCE;
+          } else {
+            posZ += (dz < 0 ? -oz : oz);
+            velZ = -velZ * BOUNCE;
+          }
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------- loop
+    let t = 0;
+    function animate(){
+      requestAnimationFrame(animate);
+      t += 1;
+
+      // visual idle spin for gems + goal even when paused/over (juice)
+      for (const g of gems){ if (g.active){ g.mesh.rotation.y += 0.05; g.mesh.rotation.x += 0.02;
+        g.mesh.position.y = 0.4 + Math.sin(t * 0.08 + g.x) * 0.06; } }
+      goalRing.rotation.z += 0.03;
+      for (const h of holes){ if (h.active) h.ring.rotation.z += 0.02; }
+
+      if (started && !over && !paused){
+        keyTilt();
+
+        // ease board tilt toward the input target
+        tiltX += (inTiltX - tiltX) * 0.18;
+        tiltZ += (inTiltZ - tiltZ) * 0.18;
+        board.rotation.x = tiltX;
+        board.rotation.z = tiltZ;
+
+        if (fallT > 0){
+          // marble is dropping into a hole -> death animation, then end
+          fallT += 1;
+          ball.position.y -= 0.06;
+          ball.scale.multiplyScalar(0.92);
+          if (fallT > 16){ ball.scale.set(1, 1, 1); end('Fell in!'); }
+        } else {
+          // accelerate the marble down the slope created by the tilt
+          velX += Math.sin(tiltZ) * ACCEL * 9.8 * 0.12;
+          velZ += -Math.sin(tiltX) * ACCEL * 9.8 * 0.12;
+          velX *= FRICT; velZ *= FRICT;
+
+          // clamp speed to keep collision stable
+          const sp = Math.hypot(velX, velZ);
+          const MAXV = 0.34;
+          if (sp > MAXV){ velX = velX / sp * MAXV; velZ = velZ / sp * MAXV; }
+
+          posX += velX; posZ += velZ;
+
+          // outer-rim clamp + bounce
+          if (posX < -PLAY){ posX = -PLAY; velX = -velX * BOUNCE; }
+          if (posX >  PLAY){ posX =  PLAY; velX = -velX * BOUNCE; }
+          if (posZ < -PLAY){ posZ = -PLAY; velZ = -velZ * BOUNCE; }
+          if (posZ >  PLAY){ posZ =  PLAY; velZ = -velZ * BOUNCE; }
+
+          resolveWalls();
+
+          ball.position.set(posX, BALL_R, posZ);
+          // roll the marble visually based on travel
+          ball.rotation.z -= velX / BALL_R;
+          ball.rotation.x += velZ / BALL_R;
+
+          // collect gems
+          for (const g of gems){
+            if (!g.active) continue;
+            if (Math.hypot(posX - g.x, posZ - g.z) < BALL_R + 0.22){
+              g.active = false; g.mesh.visible = false; gemsLeft--;
+              score += 10;
+              scoreEl.textContent = score;
+              burst(g.x, 0.4, g.z, 0xffd36c, 12);
+            }
+          }
+
+          // holes (only deadly once the marble center is over the rim center)
+          for (const h of holes){
+            if (!h.active) continue;
+            if (Math.hypot(posX - h.x, posZ - h.z) < 0.22){
+              fallT = 1;
+              burst(h.x, 0.1, h.z, 0xff5d6c, 16);
+              break;
+            }
+          }
+
+          // reach goal -> need all gems first
+          if (fallT === 0 && Math.hypot(posX - goalX, posZ - goalZ) < BALL_R + 0.24){
+            if (gemsLeft <= 0){
+              if (!won){
+                won = true;
+                score += 50;        // reach bonus
+                scoreEl.textContent = score;
+                burst(goalX, 0.3, goalZ, ACCENT, 22);
+                nextLevel();
+              }
+            }
+          }
+        }
+
+        accentLight.intensity = 1.5 + Math.sin(t * 0.15) * 0.3;
+        // pulse the goal ring brighter when all gems are gathered
+        goalMat.emissiveIntensity = gemsLeft <= 0 ? 1.6 + Math.sin(t * 0.25) * 0.6 : 0.9;
+      }
+
+      // particles
+      for (let i = sparks.length - 1; i >= 0; i--){
+        const s = sparks[i];
+        s.mesh.position.x += s.vx; s.mesh.position.y += s.vy; s.mesh.position.z += s.vz;
+        s.vy -= 0.016; s.life--;
+        if (s.life <= 0){ board.remove(s.mesh); sparks.splice(i, 1); }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    newGame(); animate();
+  </script>
+</body>
+</html>
