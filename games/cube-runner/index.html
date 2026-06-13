@@ -34,6 +34,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <!-- speed-up flash -->
@@ -55,6 +56,22 @@
       <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
       <div class="gx-modal__new" id="newBest"></div>
       <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <!-- how to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to play</div>
+      <p class="gx-help__obj">Race your neon cube down an endless track, dodging obstacle blocks and grabbing glowing orbs to push your score as high as you can.</p>
+      <ul class="gx-help__list">
+        <li><b>Swipe / ← →</b><span>Switch lane</span></li>
+        <li><b>A / D</b><span>Switch lane</span></li>
+        <li><b>Tap / Space</b><span>Restart or resume</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -466,7 +483,31 @@
       renderer.render(scene, camera);
     }
 
+    // ---------------------------------------------------------------- how-to-play overlay
+    const SEEN_KEY = 'gamf-seen-3d-cube-runner';
+    const helpEl = document.getElementById('gxHelp');
+    let helpWasRunning = false;
+    function openHelp(){
+      // pause active play while the help is open (without showing the pause modal)
+      helpWasRunning = started && !over && !paused;
+      if (helpWasRunning) paused = true;
+      helpEl.classList.add('gx-show');
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if (helpWasRunning){ paused = false; helpWasRunning = false; }
+    }
+    document.getElementById('gxHelpOpen').addEventListener('click', openHelp);
+    document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
+    helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
+
     reset(); animate();
+
+    // show help once on first visit (after reset, so the game pauses behind it)
+    if (!localStorage.getItem(SEEN_KEY)){
+      openHelp();
+      localStorage.setItem(SEEN_KEY, '1');
+    }
   </script>
 </body>
 </html>

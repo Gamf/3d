@@ -34,6 +34,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <!-- tap-to-start flash -->
@@ -55,6 +56,21 @@
       <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
       <div class="gx-modal__new" id="newBest"></div>
       <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <!-- how to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to play</div>
+      <p class="gx-help__obj">Hop forward across roads and rivers as far as you can — dodge cars and ride logs without drowning.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap / Space</b> <span>Hop forward</span></li>
+        <li><b>Swipe / Arrows / WASD</b> <span>Move any direction</span></li>
+        <li><b>P</b> <span>Pause</span></li>
+        <li><b>R</b> <span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -472,7 +488,12 @@
       'a','d','w','s','A','D','W','S','p','P','r','R'];
     addEventListener('keydown', (e) => {
       const k = e.key;
-      if (GAME_KEYS.includes(k)) e.preventDefault();
+      if (GAME_KEYS.includes(k) || k === 'Escape') e.preventDefault();
+      // while the how-to-play overlay is open, swallow game keys; let it dismiss
+      if (helpOpen()){
+        if (k === ' ' || k === 'Enter' || k === 'Escape') hideHelp();
+        return;
+      }
       if (k === 'r' || k === 'R'){ restart(); return; }
       if (k === 'p' || k === 'P'){ togglePause(); return; }
       if (over || paused){
@@ -487,6 +508,31 @@
     document.getElementById('again').addEventListener('click', (e) => {
       e.stopPropagation(); primaryAction();
     });
+
+    // ---------------------------------------------------------------- how to play
+    const helpEl = document.getElementById('gxHelp');
+    const SEEN_KEY = 'gamf-seen-3d-crossy';
+    let helpWasPaused = false;   // restore pause state we found on open
+    function helpOpen(){ return helpEl.classList.contains('gx-show'); }
+    function showHelp(){
+      if (helpEl.classList.contains('gx-show')) return;
+      helpWasPaused = paused;
+      paused = true;             // freeze the world while the overlay is up
+      helpEl.classList.add('gx-show');
+    }
+    function hideHelp(){
+      if (!helpEl.classList.contains('gx-show')) return;
+      helpEl.classList.remove('gx-show');
+      // only resume if we weren't already paused (and not mid game-over)
+      if (!helpWasPaused && !over) paused = false;
+    }
+    document.getElementById('gxHelpOpen').addEventListener('click', showHelp);
+    document.getElementById('gxHelpClose').addEventListener('click', hideHelp);
+    helpEl.addEventListener('click', (e) => { if (e.target === helpEl) hideHelp(); });
+    if (!localStorage.getItem(SEEN_KEY)){
+      showHelp();
+      localStorage.setItem(SEEN_KEY, '1');
+    }
 
     // ---------------------------------------------------------------- resize
     function resize(){

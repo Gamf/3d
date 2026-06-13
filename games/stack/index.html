@@ -23,6 +23,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
   <div class="gx-hint">
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> tap — drop the block</span>
@@ -36,6 +37,19 @@
       <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
       <div class="gx-modal__new" id="newBest" style="display:none">New best!</div>
       <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> Play again</button>
+    </div>
+  </div>
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to Play</div>
+      <p class="gx-help__obj">Drop each moving block to stack it as high as you can — overhang gets sliced off, so line it up perfectly.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap / Space</b><span>Drop the block</span></li>
+        <li><b>Enter / Arrows</b><span>Drop the block</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
   <script type="importmap">
@@ -83,6 +97,7 @@
     const H=1;                                   // block height
     const blocks=new THREE.Group(); scene.add(blocks);
     let stack, current, score, axis, dirSign, speed, over, camTargetY;
+    let paused=false;
     let chips=[];                                // falling sliced-off pieces
 
     function colorFor(i){ const h=(i*9+185)%360; const c=new THREE.Color(`hsl(${h},60%,58%)`); return c; }
@@ -96,7 +111,7 @@
     function clearBlocks(){ while(blocks.children.length) blocks.remove(blocks.children[0]);
       chips.forEach(c=>scene.remove(c.mesh)); chips=[]; }
 
-    function reset(){ over=false; score=0; document.getElementById('score').textContent=0;
+    function reset(){ over=false; paused=false; score=0; document.getElementById('score').textContent=0;
       document.getElementById('over').classList.remove('gx-show');
       clearBlocks();
       stack=[ addLayer(0,0,6,6,0) ]; camTargetY=0; axis='x'; spawnMoving(); }
@@ -115,7 +130,7 @@
         vx:horiz?sign*0.06:0,vz:horiz?0:sign*0.06,life:60});
     }
 
-    function drop(){ if(over||!current) return; const top=stack[stack.length-1]; const i=stack.length;
+    function drop(){ if(over||paused||!current) return; const top=stack[stack.length-1]; const i=stack.length;
       let overlap, newW=current.w, newD=current.d, nx=current.x, nz=current.z;
       if(axis==='x'){ const delta=current.x-top.x; overlap=current.w-Math.abs(delta);
         if(overlap<=0) return end();
@@ -153,22 +168,38 @@
     ground.rotation.x=-Math.PI/2; ground.position.y=-0.5; ground.receiveShadow=true; scene.add(ground);
 
     // ---- input: touch + keyboard ----
-    addEventListener('pointerup',()=>{ if(over) return; drop(); });
+    addEventListener('pointerup',(e)=>{ if(over||paused) return;
+      // only the play area drops a block — ignore taps on HUD buttons / modals
+      if(e.target!==renderer.domElement) return; drop(); });
     document.getElementById('again').onclick=(e)=>{ e.stopPropagation(); reset(); };
+
+    // ---- how-to-play overlay ----
+    const SEEN_KEY='gamf-seen-3d-stack';
+    const help=document.getElementById('gxHelp');
+    const helpOpen=()=>help.classList.contains('gx-show');
+    let pausedBeforeHelp=false;
+    function showHelp(){ pausedBeforeHelp=paused; paused=true; help.classList.add('gx-show'); }
+    function hideHelp(){ help.classList.remove('gx-show'); paused=pausedBeforeHelp; }
+    document.getElementById('gxHelpOpen').addEventListener('click',(e)=>{ e.stopPropagation(); showHelp(); });
+    document.getElementById('gxHelpClose').addEventListener('click',(e)=>{ e.stopPropagation(); hideHelp(); });
+    help.addEventListener('click',(e)=>{ if(e.target===help) hideHelp(); });
+    if(!localStorage.getItem(SEEN_KEY)){ showHelp(); localStorage.setItem(SEEN_KEY,'1'); }
     addEventListener('keydown',(e)=>{
       const k=e.key;
       if(k===' '||k==='Enter'||k==='ArrowUp'||k==='ArrowDown'||k==='ArrowLeft'||k==='ArrowRight'
-         ||k==='w'||k==='a'||k==='s'||k==='d'||k==='W'||k==='A'||k==='S'||k==='D'||k==='r'||k==='R'){
+         ||k==='w'||k==='a'||k==='s'||k==='d'||k==='W'||k==='A'||k==='S'||k==='D'
+         ||k==='r'||k==='R'||k==='p'||k==='P'){
         e.preventDefault();
       }
       if(k==='r'||k==='R'){ reset(); return; }
-      if(over) return;
+      if(k==='p'||k==='P'){ if(!over&&!helpOpen()) paused=!paused; return; }
+      if(over||paused) return;
       if(k===' '||k==='Enter'||k==='ArrowUp'||k==='ArrowDown'||k==='ArrowLeft'||k==='ArrowRight'
          ||k==='w'||k==='a'||k==='s'||k==='d'||k==='W'||k==='A'||k==='S'||k==='D'){ drop(); }
     });
 
     function animate(){
-      if(current&&current.moving&&!over){ const lim=8;
+      if(current&&current.moving&&!over&&!paused){ const lim=8;
         if(axis==='x'){ current.x+=dirSign*speed; if(Math.abs(current.x)>lim) dirSign*=-1; current.mesh.position.x=current.x; }
         else { current.z+=dirSign*speed; if(Math.abs(current.z)>lim) dirSign*=-1; current.mesh.position.z=current.z; } }
       // animate falling chips

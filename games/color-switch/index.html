@@ -31,6 +31,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="cs-start" id="startMsg"><b>Tap or press Space<br>to hop the ball up</b></div>
@@ -58,6 +59,23 @@
       <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
       <div class="gx-modal__new" id="newBest" style="display:none">New best!</div>
       <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> Play again</button>
+    </div>
+  </div>
+
+  <!-- how-to-play modal -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to play</div>
+      <p class="gx-help__obj">Hop the ball up through each ring, but only when its color matches the arc you pass through.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap / Space</b><span>Hop up</span></li>
+        <li><b>Up / W</b><span>Hop up</span></li>
+        <li><b>Match color</b><span>Pass the ring</span></li>
+        <li><b>Prisms</b><span>Swap ball color</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -266,13 +284,16 @@
     }
 
     // ---------- input ----------
-    onTap(renderer.domElement, ()=>{ hop(); });
+    onTap(renderer.domElement, ()=>{ if(!document.getElementById('gxHelp').classList.contains('gx-show')) hop(); });
 
     const GAME_KEYS = new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','Enter',
       'w','a','s','d','W','A','S','D','p','P','r','R']);
+    function helpOpen(){ return document.getElementById('gxHelp').classList.contains('gx-show'); }
     addEventListener('keydown', (e)=>{
       const k = e.key;
       if(GAME_KEYS.has(k)) e.preventDefault();
+      // while the how-to-play overlay is open, swallow game keys
+      if(helpOpen()){ return; }
       if(k==='r'||k==='R'){ reset(); return; }
       if(k==='p'||k==='P'){ togglePause(); return; }
       if(k===' '||k==='Enter'||k==='ArrowUp'||k==='w'||k==='W'){ hop(); return; }
@@ -282,6 +303,25 @@
     document.getElementById('over').addEventListener('pointerdown', (e)=>{
       if(e.target.id==='over') reset();
     });
+
+    // ---------- how-to-play overlay ----------
+    const HELP_KEY = 'gamf-seen-3d-color-switch';
+    const helpEl = document.getElementById('gxHelp');
+    let helpPausedGame = false;
+    function showHelp(){
+      // pause the running game while help is open; remember if it was already paused
+      if(started && !over && !paused){ paused = true; helpPausedGame = true;
+        document.getElementById('paused').classList.remove('gx-show'); }
+      helpEl.classList.add('gx-show');
+    }
+    function hideHelp(){
+      helpEl.classList.remove('gx-show');
+      if(helpPausedGame){ paused = false; helpPausedGame = false; }
+    }
+    document.getElementById('gxHelpOpen').addEventListener('click', showHelp);
+    document.getElementById('gxHelpClose').addEventListener('click', hideHelp);
+    helpEl.addEventListener('pointerdown', (e)=>{ if(e.target===helpEl) hideHelp(); });
+    if(!localStorage.getItem(HELP_KEY)){ showHelp(); localStorage.setItem(HELP_KEY, '1'); }
 
     function resize(){ const w=innerWidth, h=innerHeight; renderer.setSize(w,h);
       camera.aspect = w/h; camera.updateProjectionMatrix(); }

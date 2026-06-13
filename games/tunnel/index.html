@@ -46,6 +46,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <!-- speed-up flash -->
@@ -72,6 +73,22 @@
       <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
       <div class="gx-modal__new" id="newBest"></div>
       <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <!-- how to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to play</div>
+      <p class="gx-help__obj">Rotate around the tunnel wall to line your ship up with the gap in each oncoming ring — one hit ends the dive.</p>
+      <ul class="gx-help__list">
+        <li><b>Drag / swipe</b> <span>Rotate around wall</span></li>
+        <li><b>Arrows / A·D</b> <span>Rotate one step</span></li>
+        <li><b>Tap / Space</b> <span>Start &amp; dive</span></li>
+        <li><b>P</b> <span>Pause</span></li>
+        <li><b>R</b> <span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -393,9 +410,15 @@
 
     const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
       'a','d','w','s','A','D','W','S','p','P','r','R'];
+    function helpOpen(){ return document.getElementById('gxHelp').classList.contains('gx-show'); }
     addEventListener('keydown', (e) => {
       const k = e.key;
       if (GAME_KEYS.includes(k)) e.preventDefault();
+      // while the how-to-play overlay is up, swallow game keys (Esc/Space/Enter close it)
+      if (helpOpen()){
+        if (k === ' ' || k === 'Enter' || k === 'Escape'){ closeHelp(); }
+        return;
+      }
       if (k === 'r' || k === 'R'){ reset(); return; }
       if (k === 'p' || k === 'P'){ togglePause(); return; }
       if (k === 'ArrowLeft'  || k === 'a' || k === 'A' || k === 'w' || k === 'W' || k === 'ArrowUp'){ nudge(1);  return; }
@@ -521,6 +544,28 @@
       }
 
       renderer.render(scene, camera);
+    }
+
+    // ---------------------------------------------------------------- how to play
+    const SEEN_KEY = 'gamf-seen-3d-tunnel';
+    const helpEl   = document.getElementById('gxHelp');
+    let helpWasRunning = false;
+    function openHelp(){
+      helpWasRunning = running;   // pause the live dive while help is open
+      if (helpWasRunning) running = false;
+      helpEl.classList.add('gx-show');
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if (helpWasRunning && !over && !paused){ running = true; }
+      helpWasRunning = false;
+    }
+    document.getElementById('gxHelpOpen').addEventListener('click', (e) => { e.stopPropagation(); openHelp(); });
+    document.getElementById('gxHelpClose').addEventListener('click', (e) => { e.stopPropagation(); closeHelp(); });
+    helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
+    if (!localStorage.getItem(SEEN_KEY)){
+      helpEl.classList.add('gx-show');
+      localStorage.setItem(SEEN_KEY, '1');
     }
 
     reset(); animate();

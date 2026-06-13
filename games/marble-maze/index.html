@@ -35,6 +35,7 @@
     <span class="gx-pill">Lv <b id="level">1</b></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <!-- level toast -->
@@ -56,6 +57,22 @@
       <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
       <div class="gx-modal__new" id="newBest"></div>
       <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <!-- how to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to play</div>
+      <p class="gx-help__obj">Tilt the board to roll the marble, grab every gem, dodge the holes, then reach the glowing goal pad.</p>
+      <ul class="gx-help__list">
+        <li><b>Drag</b> <span>Tilt the board</span></li>
+        <li><b>Arrows / WASD</b> <span>Tilt the board</span></li>
+        <li><b>Goal</b> <span>Collect all gems, then reach the pad</span></li>
+        <li><b>P</b> <span>Pause</span></li>
+        <li><b>R</b> <span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -680,7 +697,30 @@
       renderer.render(scene, camera);
     }
 
+    // ---------------------------------------------------------------- how to play
+    const helpEl = document.getElementById('gxHelp');
+    const SEEN_KEY = 'gamf-seen-3d-marble-maze';
+    let helpPausedByMe = false;
+    function openHelp(){
+      // pause the game while help is open (don't fight an existing pause)
+      if (started && !over && !paused){ paused = true; helpPausedByMe = true; }
+      helpEl.classList.add('gx-show');
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if (helpPausedByMe){ paused = false; helpPausedByMe = false; }
+    }
+    document.getElementById('gxHelpOpen').addEventListener('click', openHelp);
+    document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
+    helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
+
     newGame(); animate();
+
+    // first visit: show help once (after newGame so it pauses the live game)
+    if (!localStorage.getItem(SEEN_KEY)){
+      openHelp();
+      localStorage.setItem(SEEN_KEY, '1');
+    }
   </script>
 </body>
 </html>

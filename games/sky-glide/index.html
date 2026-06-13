@@ -36,6 +36,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <!-- get-ready / flash -->
@@ -57,6 +58,22 @@
       <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
       <div class="gx-modal__new" id="newBest"></div>
       <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <!-- how-to-play overlay -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to Play</div>
+      <p class="gx-help__obj">Tap to flap upward and glide through as many receding ring gates as you can without clipping a rim or hitting the floor or ceiling.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap / Space</b><span>Flap up</span></li>
+        <li><b>Arrow Up / W</b><span>Flap up</span></li>
+        <li><b>Arrow Down / S</b><span>Nudge down</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -510,7 +527,30 @@
       renderer.render(scene, camera);
     }
 
+    // ---------------------------------------------------------------- how-to-play overlay
+    const HELP_KEY = 'gamf-seen-3d-sky-glide';
+    const helpEl   = document.getElementById('gxHelp');
+    let pausedForHelp = false;
+    function showHelp(){
+      // pause an in-progress run while the help is open
+      if (started && !over && !paused){ paused = true; pausedForHelp = true; }
+      helpEl.classList.add('gx-show');
+    }
+    function hideHelp(){
+      helpEl.classList.remove('gx-show');
+      if (pausedForHelp){ paused = false; pausedForHelp = false; }
+    }
+    document.getElementById('gxHelpOpen').addEventListener('click', showHelp);
+    document.getElementById('gxHelpClose').addEventListener('click', hideHelp);
+    helpEl.addEventListener('click', (e) => { if (e.target === helpEl) hideHelp(); });
+
     reset(); animate();
+
+    // first visit: show help (and pause the fresh run) once
+    if (!localStorage.getItem(HELP_KEY)){
+      showHelp();
+      localStorage.setItem(HELP_KEY, '1');
+    }
   </script>
 </body>
 </html>

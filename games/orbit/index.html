@@ -46,6 +46,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <!-- danger flash -->
@@ -72,6 +73,22 @@
       <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
       <div class="gx-modal__new" id="newBest"></div>
       <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <!-- how-to-play overlay -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to play</div>
+      <p class="gx-help__obj">Swing your ship around the orbit ring to dodge every asteroid raining in toward the planet — survive as long as you can.</p>
+      <ul class="gx-help__list">
+        <li><b>Drag / Swipe</b><span>Swing ship around orbit</span></li>
+        <li><b>Arrows / A&nbsp;D</b><span>Nudge around orbit</span></li>
+        <li><b>Tap / Space</b><span>Launch · resume · play again</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -416,6 +433,11 @@
       'a','d','w','s','A','D','W','S','p','P','r','R'];
     addEventListener('keydown', (e) => {
       const k = e.key;
+      // swallow game keys while the how-to-play overlay is open
+      if (document.getElementById('gxHelp').classList.contains('gx-show')){
+        if (GAME_KEYS.includes(k)) e.preventDefault();
+        return;
+      }
       if (GAME_KEYS.includes(k)) e.preventDefault();
       if (k === 'r' || k === 'R'){ reset(); return; }
       if (k === 'p' || k === 'P'){ togglePause(); return; }
@@ -546,6 +568,33 @@
       camera.lookAt(0, 0.4, 0);
 
       renderer.render(scene, camera);
+    }
+
+    // ---------------------------------------------------------------- how-to-play
+    const SEEN_KEY = 'gamf-seen-3d-orbit';
+    const helpEl   = document.getElementById('gxHelp');
+    let helpResume = false;   // remember whether to resume the run on close
+
+    function openHelp(){
+      // pause an in-progress run while the help overlay is up
+      if (started && !over && !paused){ paused = true; running = false; helpResume = true; }
+      else helpResume = false;
+      helpEl.classList.add('gx-show');
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if (helpResume){ paused = false; running = true; helpResume = false; }
+    }
+
+    document.getElementById('gxHelpOpen').addEventListener('click', openHelp);
+    document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
+    // backdrop click (outside the card) closes
+    helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
+
+    // first-visit auto-show
+    if (!localStorage.getItem(SEEN_KEY)){
+      helpEl.classList.add('gx-show');
+      localStorage.setItem(SEEN_KEY, '1');
     }
 
     reset(); animate();
