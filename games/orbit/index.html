@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>Orbit Dodge — Gamf</title>
+  <meta name="description" content="Your ship circles a glowing planet while asteroids rain in from deep space. Drag to swing the ship around the orbit and stay clear of every incoming rock. Survival time is your score.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <style>
+    /* genre accent for this game (3D = mint) */
+    body { --gx-accent: #5ad1a8; }
+    html, body { height: 100%; overflow: hidden; touch-action: none;
+      -webkit-user-select: none; user-select: none; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    /* "danger" warning flash (purely cosmetic, no interaction) */
+    .ob-flash { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 70px);
+      text-align: center; z-index: 4; pointer-events: none;
+      font-family: var(--gx-font-display); font-weight: 400; font-size: clamp(26px, 7vw, 44px);
+      letter-spacing: 1px; text-transform: uppercase;
+      color: var(--gx-amber);
+      text-shadow: 0 0 22px color-mix(in srgb, var(--gx-amber) 70%, transparent);
+      opacity: 0; transform: translateY(-6px); transition: opacity .25s ease, transform .25s ease; }
+    .ob-flash.show { opacity: 1; transform: translateY(0); }
+    /* "tap to start" attract prompt */
+    .ob-start { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center;
+      padding: 24px; pointer-events: none; text-align: center; }
+    .ob-start__card { font-family: var(--gx-font-display); color: var(--gx-text);
+      text-transform: uppercase; letter-spacing: 2px; font-size: clamp(34px, 9vw, 64px);
+      line-height: .92; }
+    .ob-start__sub { display: block; margin-top: 14px; font-family: var(--gx-font-mono);
+      font-weight: 700; font-size: clamp(11px, 3vw, 14px); letter-spacing: 2px;
+      color: var(--gx-red); animation: gx-blink 1.4s steps(1) infinite; }
+    .ob-start.hide { display: none; }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> 3D</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Score <b id="score">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+  </header>
+
+  <!-- danger flash -->
+  <div class="ob-flash" id="flash"></div>
+
+  <!-- attract prompt -->
+  <div class="ob-start" id="startPrompt">
+    <div class="ob-start__card">Orbit Dodge<span class="ob-start__sub">Tap or press space to launch</span></div>
+  </div>
+
+  <!-- controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-left"/></svg><svg class="gx-ico"><use href="#i-right"/></svg> drag / arrows — orbit</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-play"/></svg> space / enter — launch</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
+  </div>
+
+  <!-- pause / game-over modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Game over</h2>
+      <div class="gx-modal__row">Score <b id="finalScore">0</b></div>
+      <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { onDrag } from './touch.js';
+
+    // ---------------------------------------------------------------- seeded LCG
+    // No Math.random / Date — the asteroid stream is fully deterministic.
+    const SEED0 = 0x9E3779B1 >>> 0;
+    let seed = SEED0;
+    function srnd(){ seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; }
+    function srange(a, b){ return a + (b - a) * srnd(); }
+    function sint(n){ return Math.floor(srnd() * n); }
+
+    // ---------------------------------------------------------------- high score
+    const BEST_KEY = 'gamf-3d-orbit-best';
+    let best = +(localStorage.getItem(BEST_KEY) || 0) || 0;
+    const scoreEl = document.getElementById('score');
+    const bestEl  = document.getElementById('best');
+    const flashEl = document.getElementById('flash');
+    const startPrompt = document.getElementById('startPrompt');
+    bestEl.textContent = best;
+
+    // ---------------------------------------------------------------- palette
+    const C_BG    = 0x15110e;   // canvas background (arcade warm near-black)
+    const C_RED   = 0xd8412b;   // accent red (asteroids / danger)
+    const C_AMBER = 0xe8a23a;   // accent amber (planet glow / warnings)
+    const C_MINT  = 0x5ad1a8;   // 3D genre accent (player ship)
+    const C_BONE  = 0xf4ede1;   // bone text / sun
+
+    // ---------------------------------------------------------------- geometry config
+    const PLANET_R   = 4.2;     // radius of the planet
+    const ORBIT_R    = 8.6;     // radius the ship rides at (around the planet)
+    const KILL_R     = ORBIT_R; // asteroids threaten the ship at this radius
+    const SHIP_HALF  = 0.42;    // ship angular half-size used for collisions (radians)
+
+    // ---------------------------------------------------------------- renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.18;
+    document.body.appendChild(renderer.domElement);
+
+    // ---------------------------------------------------------------- scene + fog
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(C_BG);
+    scene.fog = new THREE.Fog(C_BG, 26, 64);
+
+    // The whole orbital plane is tilted so it reads as 3D, not a flat top-down disc.
+    const TILT = 0.62;          // radians the orbit plane leans toward the camera
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
+    camera.position.set(0, 13.5, 17);
+    camera.lookAt(0, 0, 0);
+
+    // ---------------------------------------------------------------- starfield
+    (() => {
+      const N = 320;
+      const pos = new Float32Array(N * 3);
+      for (let i = 0; i < N; i++){
+        // scatter on a far shell behind the action
+        const u = srange(-1, 1), th = srange(0, Math.PI * 2), r = srange(60, 95);
+        const s = Math.sqrt(1 - u * u);
+        pos[i * 3]     = Math.cos(th) * s * r;
+        pos[i * 3 + 1] = u * r * 0.6 - 6;
+        pos[i * 3 + 2] = Math.sin(th) * s * r - 20;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const m = new THREE.PointsMaterial({ color: 0x8a7a64, size: 0.5, sizeAttenuation: true,
+        transparent: true, opacity: 0.7 });
+      scene.add(new THREE.Points(g, m));
+    })();
+
+    // ---------------------------------------------------------------- lights
+    scene.add(new THREE.HemisphereLight(0x4a3826, 0x100c09, 0.5));
+    const sun = new THREE.DirectionalLight(C_BONE, 1.7);
+    sun.position.set(-8, 12, 10);
+    scene.add(sun);
+    const amberGlow = new THREE.PointLight(C_AMBER, 1.6, 40, 1.6);
+    amberGlow.position.set(0, 1, 0);
+    scene.add(amberGlow);
+
+    // ---------------------------------------------------------------- orbital plane
+    // Everything that orbits lives inside this tilted group so the camera sees
+    // a leaning ring rather than a flat overhead disc.
+    const field = new THREE.Group();
+    field.rotation.x = TILT;
+    scene.add(field);
+
+    // ---------------------------------------------------------------- planet
+    const planetTex = (() => {
+      const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#3a2114'; ctx.fillRect(0, 0, 256, 128);
+      // banded amber/red continents for a lava-planet feel (deterministic blobs)
+      for (let i = 0; i < 46; i++){
+        const x = sint(256), y = sint(128), rr = srange(6, 22);
+        const hot = srnd() > 0.5;
+        ctx.fillStyle = hot ? 'rgba(216,65,43,0.55)' : 'rgba(232,162,58,0.40)';
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const planet = new THREE.Mesh(
+      new THREE.SphereGeometry(PLANET_R, 40, 28),
+      new THREE.MeshStandardMaterial({
+        map: planetTex, color: 0xcfae84,
+        emissive: new THREE.Color(C_RED).multiplyScalar(0.10), emissiveMap: planetTex,
+        roughness: 0.85, metalness: 0.1
+      })
+    );
+    field.add(planet);
+    // faint atmosphere shell
+    const atmo = new THREE.Mesh(
+      new THREE.SphereGeometry(PLANET_R + 0.5, 32, 22),
+      new THREE.MeshBasicMaterial({ color: C_AMBER, transparent: true, opacity: 0.06, side: THREE.BackSide })
+    );
+    field.add(atmo);
+
+    // ---------------------------------------------------------------- orbit ring guide
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(ORBIT_R, 0.045, 8, 96),
+      new THREE.MeshBasicMaterial({ color: C_MINT, transparent: true, opacity: 0.22 })
+    );
+    ring.rotation.x = Math.PI / 2;   // lay flat in the (already tilted) field
+    field.add(ring);
+
+    // ---------------------------------------------------------------- ship
+    // The ship rides the orbit ring. We place it on a pivot and spin the pivot
+    // to move it around the planet; that keeps its nose tangent to the orbit.
+    const shipPivot = new THREE.Object3D();
+    field.add(shipPivot);
+
+    const ship = new THREE.Group();
+    ship.position.set(ORBIT_R, 0, 0);
+    shipPivot.add(ship);
+
+    const shipBody = new THREE.Mesh(
+      new THREE.ConeGeometry(0.5, 1.5, 4),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: new THREE.Color(C_MINT), emissiveIntensity: 1.05,
+        roughness: 0.25, metalness: 0.55, flatShading: true
+      })
+    );
+    // cone default points +y; rotate so the nose leads the orbit (tangent, +z local)
+    shipBody.rotation.x = Math.PI / 2;
+    ship.add(shipBody);
+    // glowing halo around the ship
+    const shipHalo = new THREE.Mesh(
+      new THREE.TorusGeometry(0.62, 0.06, 8, 18),
+      new THREE.MeshBasicMaterial({ color: C_MINT, transparent: true, opacity: 0.7 })
+    );
+    ship.add(shipHalo);
+    const shipLight = new THREE.PointLight(C_MINT, 1.3, 9, 2);
+    ship.add(shipLight);
+    // little engine trail spark
+    const trail = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 8, 8),
+      new THREE.MeshBasicMaterial({ color: C_AMBER, transparent: true, opacity: 0.8 })
+    );
+    trail.position.set(0, 0, -0.95);
+    ship.add(trail);
+
+    // ---------------------------------------------------------------- asteroid pool
+    // Each asteroid flies straight in from far out toward the planet centre. It
+    // crosses the orbit radius at a known angle; the ship must not be there then.
+    const rockGeo = new THREE.IcosahedronGeometry(0.62, 0);
+    const ASTEROID_POOL = 24;
+    const asteroids = [];
+    for (let i = 0; i < ASTEROID_POOL; i++){
+      const mat = new THREE.MeshStandardMaterial({
+        color: C_RED, emissive: new THREE.Color(C_RED), emissiveIntensity: 0.45,
+        roughness: 0.7, metalness: 0.3, flatShading: true
+      });
+      const mesh = new THREE.Mesh(rockGeo, mat);
+      mesh.visible = false;
+      field.add(mesh);
+      asteroids.push({
+        mesh, mat, active: false, angle: 0, dist: 0, speed: 0, scale: 1,
+        spin: new THREE.Vector3(), threatened: false
+      });
+    }
+
+    // incoming-warning marker: a thin red wedge on the orbit ring where a rock will land
+    const warnGeo = new THREE.RingGeometry(ORBIT_R - 0.55, ORBIT_R + 0.55, 5, 1, 0, 0.42);
+    const warnPool = [];
+    for (let i = 0; i < ASTEROID_POOL; i++){
+      const m = new THREE.Mesh(warnGeo, new THREE.MeshBasicMaterial({
+        color: C_RED, transparent: true, opacity: 0, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2;   // lie flat on the orbit plane
+      m.position.y = 0.02;
+      field.add(m);
+      warnPool.push(m);
+    }
+
+    // ---------------------------------------------------------------- particles
+    const sparkGeo = new THREE.SphereGeometry(0.1, 6, 6);
+    const sparks = [];
+    function burst(x, y, z, hex, n = 16){
+      const m = new THREE.MeshBasicMaterial({ color: hex });
+      for (let i = 0; i < n; i++){
+        const s = new THREE.Mesh(sparkGeo, m); s.position.set(x, y, z);
+        field.add(s);
+        sparks.push({ mesh: s, vx: srange(-0.2, 0.2), vy: srange(-0.2, 0.2),
+          vz: srange(-0.2, 0.2), life: 30 });
+      }
+    }
+
+    // ---------------------------------------------------------------- game state
+    let angle;        // current ship orbit angle (radians)
+    let targetAngle;  // where the ship is gliding to
+    let elapsed;      // survival time in frames
+    let score, level;
+    let spawnTimer;   // frames until next asteroid spawn
+    let spawnGap;     // frames between spawns (shrinks with level)
+    let over, paused, started, running;
+    let t = 0;
+
+    function setPill(){ scoreEl.textContent = score; }
+
+    function freeAll(){
+      for (const a of asteroids){ a.active = false; a.mesh.visible = false; }
+      for (const w of warnPool){ w.material.opacity = 0; }
+      for (let i = sparks.length - 1; i >= 0; i--){ field.remove(sparks[i].mesh); }
+      sparks.length = 0;
+    }
+
+    const overEl = document.getElementById('over');
+    const overTitle = document.getElementById('overTitle');
+    const againLabel = document.getElementById('againLabel');
+
+    function reset(){
+      seed = SEED0;
+      angle = Math.PI / 2;            // start at the top of the orbit
+      targetAngle = angle;
+      elapsed = 0; score = 0; level = 1;
+      spawnGap = 78; spawnTimer = 70;
+      over = false; paused = false; started = false; running = false;
+      freeAll();
+      shipPivot.rotation.y = -angle;
+      setPill();
+      overEl.classList.remove('gx-show');
+      startPrompt.classList.remove('hide');
+    }
+
+    function beginRun(){
+      if (started || over) return;
+      started = true; running = true;
+      startPrompt.classList.add('hide');
+    }
+
+    function spawnAsteroid(){
+      const a = asteroids.find(x => !x.active);
+      if (!a) return;
+      const w = warnPool[asteroids.indexOf(a)];
+      a.active = true; a.threatened = false;
+      // pick a target angle on the orbit (this is where it will cross the ship's ring)
+      a.angle = srange(0, Math.PI * 2);
+      a.dist = srange(34, 40);                 // start far out along that radial
+      a.speed = srange(0.16, 0.24) + level * 0.018;
+      a.scale = srange(0.7, 1.25);
+      a.spin.set(srange(-0.08, 0.08), srange(-0.08, 0.08), srange(-0.08, 0.08));
+      a.mesh.visible = true;
+      a.mesh.scale.setScalar(a.scale);
+      // place its warning wedge centred on the landing angle
+      w.material.opacity = 0;
+      w.rotation.z = a.angle - 0.21;           // RingGeometry wedge starts at 0..0.42
+    }
+
+    function showFlash(txt){
+      flashEl.textContent = txt;
+      flashEl.classList.add('show');
+      clearTimeout(showFlash._t);
+      showFlash._t = setTimeout(() => flashEl.classList.remove('show'), 900);
+    }
+
+    function end(wx, wy, wz){
+      if (over) return;
+      over = true; started = false; running = false;
+      const isBest = score > best;
+      if (isBest){ best = score; localStorage.setItem(BEST_KEY, best); bestEl.textContent = best; }
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('bestScore').textContent = best;
+      document.getElementById('newBest').textContent = (isBest && score > 0) ? 'New best!' : '';
+      overTitle.textContent = 'Game over';
+      againLabel.textContent = 'Play again';
+      overEl.classList.add('gx-show');
+      burst(wx, wy, wz, C_RED, 30);
+    }
+
+    function togglePause(){
+      if (over || !started) return;
+      paused = !paused; running = !paused;
+      if (paused){
+        overTitle.textContent = 'Paused';
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('bestScore').textContent = best;
+        document.getElementById('newBest').textContent = '';
+        againLabel.textContent = 'Resume';
+        overEl.classList.add('gx-show');
+      } else {
+        overEl.classList.remove('gx-show');
+      }
+    }
+
+    function primaryAction(){
+      if (paused){ togglePause(); return; }
+      if (over){ reset(); return; }
+      if (!started){ beginRun(); return; }
+    }
+
+    // ---------------------------------------------------------------- rotation input
+    const NUDGE = Math.PI / 9;       // 20 degrees per key press
+    function rotateBy(rad){
+      if (over || paused) return;
+      if (!started){ beginRun(); }
+      targetAngle += rad;
+    }
+    function nudge(dir){ rotateBy(dir * NUDGE); }
+
+    // drag to swing the ship around the orbit
+    onDrag(renderer.domElement, {
+      start: () => { if (!started && !over && !paused) beginRun(); },
+      move: (e) => {
+        if (over || paused) return;
+        // horizontal drag maps to orbital rotation; scaled by viewport width
+        targetAngle -= (e.dx / innerWidth) * Math.PI * 2.6;
+      }
+    });
+    // tap (no real drag) begins / restarts
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (over) primaryAction();
+    });
+
+    const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
+      'a','d','w','s','A','D','W','S','p','P','r','R'];
+    addEventListener('keydown', (e) => {
+      const k = e.key;
+      if (GAME_KEYS.includes(k)) e.preventDefault();
+      if (k === 'r' || k === 'R'){ reset(); return; }
+      if (k === 'p' || k === 'P'){ togglePause(); return; }
+      if (k === 'ArrowLeft'  || k === 'a' || k === 'A' || k === 'w' || k === 'W' || k === 'ArrowUp'){ nudge(1);  return; }
+      if (k === 'ArrowRight' || k === 'd' || k === 'D' || k === 's' || k === 'S' || k === 'ArrowDown'){ nudge(-1); return; }
+      if (k === ' ' || k === 'Enter'){ primaryAction(); return; }
+    });
+    document.getElementById('again').addEventListener('click', (e) => {
+      e.stopPropagation(); primaryAction();
+    });
+
+    // ---------------------------------------------------------------- resize
+    function resize(){
+      const w = innerWidth, h = innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+    addEventListener('resize', resize); resize();
+
+    // ---------------------------------------------------------------- helpers
+    // shortest signed angular difference a->b in [-PI, PI]
+    function angDiff(a, b){
+      let d = (b - a) % (Math.PI * 2);
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      return d;
+    }
+
+    // ---------------------------------------------------------------- loop
+    function animate(){
+      requestAnimationFrame(animate);
+      t += 1;
+
+      // gentle planet spin always
+      planet.rotation.y += 0.0016;
+
+      if (running){
+        // survival score: ~ time alive
+        elapsed += 1;
+        score = Math.floor(elapsed / 6);
+        setPill();
+
+        // difficulty ramp: spawns get faster, asteroids quicker
+        const newLevel = 1 + Math.floor(elapsed / 540);
+        if (newLevel > level){
+          level = newLevel;
+          spawnGap = Math.max(26, 78 - (level - 1) * 7);
+          showFlash('Wave ' + level);
+        }
+
+        // glide the ship toward the target orbit angle
+        angle += angDiff(angle, targetAngle) * 0.22;
+        shipPivot.rotation.y = -angle;
+
+        // spawn asteroids on a timer
+        spawnTimer -= 1;
+        if (spawnTimer <= 0){
+          spawnAsteroid();
+          // sometimes a double-spawn at higher waves for pressure
+          if (level >= 3 && srnd() > 0.62) spawnAsteroid();
+          spawnTimer = spawnGap + sint(20);
+        }
+
+        // advance asteroids inward along their radial line
+        for (let i = 0; i < asteroids.length; i++){
+          const a = asteroids[i];
+          if (!a.active) continue;
+          const w = warnPool[i];
+          a.dist -= a.speed;
+          // position on the (flat, in-field) orbital plane
+          const x = Math.cos(a.angle) * a.dist;
+          const z = Math.sin(a.angle) * a.dist;
+          a.mesh.position.set(x, 0, z);
+          a.mesh.rotation.x += a.spin.x; a.mesh.rotation.y += a.spin.y; a.mesh.rotation.z += a.spin.z;
+
+          // warning wedge pulses brighter as the rock nears the orbit
+          if (a.dist > KILL_R){
+            const prox = THREE.MathUtils.clamp((40 - a.dist) / (40 - KILL_R), 0, 1);
+            w.material.opacity = 0.12 + prox * 0.34 * (0.6 + 0.4 * Math.sin(t * 0.4));
+          }
+
+          // collision: when the rock crosses the ship's orbit radius
+          if (!a.threatened && a.dist <= KILL_R + 0.5){
+            a.threatened = true;
+            const half = SHIP_HALF + a.scale * 0.09;   // bigger rocks = bigger window
+            if (Math.abs(angDiff(angle, a.angle)) < half){
+              // ship was at the landing angle — hit
+              end(x, 0, z);
+            } else {
+              // dodged — award a small survival bonus + spark
+              score += 2; setPill();
+              w.material.opacity = 0;
+            }
+          }
+
+          // recycle once it's deep past the orbit (it sails on into the planet)
+          if (a.dist <= -PLANET_R){
+            a.active = false; a.mesh.visible = false;
+            w.material.opacity = 0;
+            // little impact puff on the far side of the planet
+            burst(Math.cos(a.angle) * 0.5, 0, Math.sin(a.angle) * 0.5, C_AMBER, 8);
+          }
+        }
+      } else {
+        // attract / paused / dead idle: slow auto-orbit drift on the ship
+        if (!over && !paused){
+          targetAngle += 0.006;
+          angle += angDiff(angle, targetAngle) * 0.12;
+          shipPivot.rotation.y = -angle;
+        }
+      }
+
+      // ship idle motion (always — looks alive on the attract screen too)
+      shipHalo.rotation.z += 0.06;
+      trail.material.opacity = 0.5 + 0.4 * Math.sin(t * 0.5);
+      shipLight.intensity = 1.2 + Math.sin(t * 0.2) * 0.25;
+
+      // particles
+      for (let i = sparks.length - 1; i >= 0; i--){
+        const s = sparks[i];
+        s.mesh.position.x += s.vx; s.mesh.position.y += s.vy; s.mesh.position.z += s.vz;
+        s.life--;
+        if (s.life <= 0){ field.remove(s.mesh); sparks.splice(i, 1); }
+      }
+
+      // slow cinematic camera sway
+      camera.position.x = Math.sin(t * 0.0016) * 1.6;
+      camera.lookAt(0, 0.4, 0);
+
+      renderer.render(scene, camera);
+    }
+
+    reset(); animate();
+  </script>
+</body>
+</html>

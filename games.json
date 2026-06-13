@@ -9,7 +9,12 @@
       "icon": "🏃",
       "color": "#5ad1a8",
       "dims": "3D",
-      "tags": ["drag", "arrows", "endless", "three.js"],
+      "tags": [
+        "drag",
+        "arrows",
+        "endless",
+        "three.js"
+      ],
       "license": "MIT",
       "credit": "Gamf original"
     },
@@ -19,7 +24,11 @@
       "path": "games/helix-drop/",
       "icon": "🌀",
       "dims": "3D",
-      "tags": ["drag", "arcade", "three.js"],
+      "tags": [
+        "drag",
+        "arcade",
+        "three.js"
+      ],
       "license": "MIT",
       "credit": "Gamf · helix-drop design"
     },
@@ -29,7 +38,11 @@
       "path": "games/stack/",
       "icon": "🧱",
       "dims": "3D",
-      "tags": ["tap", "tower", "three.js"],
+      "tags": [
+        "tap",
+        "tower",
+        "three.js"
+      ],
       "license": "MIT",
       "credit": "Gamf · stack-tower design"
     },
@@ -40,7 +53,92 @@
       "icon": "🔮",
       "color": "#5ad1a8",
       "dims": "3D",
-      "tags": ["tilt", "drag", "maze", "three.js"],
+      "tags": [
+        "tilt",
+        "drag",
+        "maze",
+        "three.js"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "tunnel",
+      "title": "Tunnel",
+      "path": "games/tunnel/",
+      "icon": "🛸",
+      "color": "#5ad1a8",
+      "dims": "3D",
+      "tags": [
+        "endless",
+        "neon",
+        "reflex",
+        "tunnel"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "crossy",
+      "title": "Crossy",
+      "path": "games/crossy/",
+      "icon": "🐔",
+      "color": "#5ad1a8",
+      "dims": "3D",
+      "tags": [
+        "hopper",
+        "endless",
+        "dodge",
+        "arcade"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "sky-glide",
+      "title": "Sky Glide",
+      "path": "games/sky-glide/",
+      "icon": "🪂",
+      "color": "#5ad1a8",
+      "dims": "3D",
+      "tags": [
+        "flappy",
+        "flight",
+        "endless",
+        "reflex"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "color-switch",
+      "title": "Color Switch",
+      "path": "games/color-switch/",
+      "icon": "🌈",
+      "color": "#5ad1a8",
+      "dims": "3D",
+      "tags": [
+        "arcade",
+        "reflex",
+        "one-tap",
+        "color-match"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "orbit",
+      "title": "Orbit Dodge",
+      "path": "games/orbit/",
+      "icon": "🛰️",
+      "color": "#5ad1a8",
+      "dims": "3D",
+      "tags": [
+        "dodge",
+        "orbit",
+        "survival",
+        "arcade"
+      ],
       "license": "MIT",
       "credit": "Gamf original"
     }

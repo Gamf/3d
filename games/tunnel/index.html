@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>Tunnel — Gamf</title>
+  <meta name="description" content="Fly down an endless neon tunnel. Rotate around the wall to slip through the gaps in oncoming rings. Speed never stops climbing.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <style>
+    /* genre accent for this game (3D = mint) */
+    body { --gx-accent: #5ad1a8; }
+    html, body { height: 100%; overflow: hidden; touch-action: none;
+      -webkit-user-select: none; user-select: none; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    /* big speed-up flash (purely cosmetic, no interaction) */
+    .tn-flash { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 70px);
+      text-align: center; z-index: 4; pointer-events: none;
+      font-family: var(--gx-font-display); font-weight: 400; font-size: clamp(26px, 7vw, 44px);
+      letter-spacing: 1px; text-transform: uppercase;
+      color: var(--gx-amber);
+      text-shadow: 0 0 22px color-mix(in srgb, var(--gx-amber) 70%, transparent);
+      opacity: 0; transform: translateY(-6px); transition: opacity .25s ease, transform .25s ease; }
+    .tn-flash.show { opacity: 1; transform: translateY(0); }
+    /* "tap to start" attract prompt */
+    .tn-start { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center;
+      padding: 24px; pointer-events: none; text-align: center; }
+    .tn-start__card { font-family: var(--gx-font-display); color: var(--gx-text);
+      text-transform: uppercase; letter-spacing: 2px; font-size: clamp(34px, 9vw, 64px);
+      line-height: .92; }
+    .tn-start__sub { display: block; margin-top: 14px; font-family: var(--gx-font-mono);
+      font-weight: 700; font-size: clamp(11px, 3vw, 14px); letter-spacing: 2px;
+      color: var(--gx-red); animation: gx-blink 1.4s steps(1) infinite; }
+    .tn-start.hide { display: none; }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> 3D</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Score <b id="score">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+  </header>
+
+  <!-- speed-up flash -->
+  <div class="tn-flash" id="flash"></div>
+
+  <!-- attract prompt -->
+  <div class="tn-start" id="startPrompt">
+    <div class="tn-start__card">Tunnel<span class="tn-start__sub">Tap or press space to dive</span></div>
+  </div>
+
+  <!-- controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-left"/></svg><svg class="gx-ico"><use href="#i-right"/></svg> drag / arrows — rotate</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-play"/></svg> space / enter — start</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
+  </div>
+
+  <!-- pause / game-over modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Game over</h2>
+      <div class="gx-modal__row">Score <b id="finalScore">0</b></div>
+      <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> <span id="againLabel">Play again</span></button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { onDrag } from './touch.js';
+
+    // ---------------------------------------------------------------- seeded LCG
+    // No Math.random / Date — fully deterministic ring stream.
+    const SEED0 = 0x2F6E4A1D >>> 0;
+    let seed = SEED0;
+    function srnd(){ seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; }
+    function srange(a, b){ return a + (b - a) * srnd(); }
+    function sint(n){ return Math.floor(srnd() * n); }
+
+    // ---------------------------------------------------------------- high score
+    const BEST_KEY = 'gamf-3d-tunnel-best';
+    let best = +(localStorage.getItem(BEST_KEY) || 0) || 0;
+    const scoreEl = document.getElementById('score');
+    const bestEl  = document.getElementById('best');
+    const flashEl = document.getElementById('flash');
+    const startPrompt = document.getElementById('startPrompt');
+    bestEl.textContent = best;
+
+    // ---------------------------------------------------------------- palette
+    const C_BG    = 0x15110e;   // canvas background (arcade warm near-black)
+    const C_RED   = 0xd8412b;   // accent red
+    const C_AMBER = 0xe8a23a;   // accent amber
+    const C_MINT  = 0x5ad1a8;   // 3D genre accent (player / safe gaps)
+    const C_BONE  = 0xf4ede1;   // bone text
+
+    // ---------------------------------------------------------------- tunnel config
+    const TUBE_R   = 6.0;       // radius of the tunnel wall
+    const SEGMENTS = 18;        // ring segments around the circle
+    const SPAWN_Z  = -210;      // where rings appear (far ahead)
+    const DESPAWN_Z = 12;       // where rings get recycled (behind camera)
+    const RING_GAP = 22;        // z-distance between rings
+    const SHIP_Z   = 0;         // ship's fixed z
+    const SHIP_ORBIT = TUBE_R - 1.05; // radius the ship rides at, near the wall
+
+    // ---------------------------------------------------------------- renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.16;
+    document.body.appendChild(renderer.domElement);
+
+    // ---------------------------------------------------------------- scene + fog
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(C_BG);
+    scene.fog = new THREE.Fog(C_BG, 40, 170);
+
+    const camera = new THREE.PerspectiveCamera(74, 1, 0.1, 360);
+    camera.position.set(0, 0, 9);
+    camera.lookAt(0, 0, -40);
+
+    // ---------------------------------------------------------------- lights
+    scene.add(new THREE.HemisphereLight(0x4a3826, 0x100c09, 0.55));
+    const headlamp = new THREE.PointLight(C_BONE, 2.0, 60, 1.4);
+    headlamp.position.set(0, 0, 6);
+    scene.add(headlamp);
+    const mintGlow = new THREE.PointLight(C_MINT, 2.4, 30, 1.8);
+    scene.add(mintGlow);
+
+    // ---------------------------------------------------------------- tunnel wall (neon ribs)
+    // A long cylinder shell, open-ended, drawn from inside (BackSide).
+    const tubeTex = (() => {
+      const c = document.createElement('canvas'); c.width = 64; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#1b1410'; ctx.fillRect(0, 0, 64, 256);
+      // bright ribs running around the tube (horizontal bands)
+      ctx.fillStyle = 'rgba(232,162,58,0.20)';
+      for (let y = 0; y < 256; y += 32){ ctx.fillRect(0, y, 64, 3); }
+      // faint longitudinal seam
+      ctx.fillStyle = 'rgba(216,65,43,0.16)';
+      ctx.fillRect(0, 0, 2, 256);
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(SEGMENTS, 26);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const tube = new THREE.Mesh(
+      new THREE.CylinderGeometry(TUBE_R, TUBE_R, 440, SEGMENTS, 1, true),
+      new THREE.MeshStandardMaterial({
+        map: tubeTex, color: 0x2a1f17, side: THREE.BackSide,
+        roughness: 0.62, metalness: 0.45,
+        emissive: new THREE.Color(C_AMBER).multiplyScalar(0.04), emissiveMap: tubeTex
+      })
+    );
+    tube.rotation.x = Math.PI / 2;       // lay the cylinder down the -z axis
+    tube.position.z = -180;
+    scene.add(tube);
+
+    // a second, fainter wireframe shell adds neon depth lines
+    const wire = new THREE.Mesh(
+      new THREE.CylinderGeometry(TUBE_R + 0.02, TUBE_R + 0.02, 440, SEGMENTS, 40, true),
+      new THREE.MeshBasicMaterial({ color: C_RED, wireframe: true, transparent: true, opacity: 0.12 })
+    );
+    wire.rotation.x = Math.PI / 2; wire.position.z = -180;
+    scene.add(wire);
+
+    // ---------------------------------------------------------------- ship
+    // A small craft riding the inside of the wall. Lives on a pivot so we can
+    // orbit it around the tube centre by rotating the pivot.
+    const shipPivot = new THREE.Object3D();
+    shipPivot.position.z = SHIP_Z;
+    scene.add(shipPivot);
+
+    const ship = new THREE.Group();
+    ship.position.set(0, SHIP_ORBIT, 0);  // sits at the top of the circle by default
+    shipPivot.add(ship);
+
+    const shipBody = new THREE.Mesh(
+      new THREE.ConeGeometry(0.6, 1.7, 4),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: new THREE.Color(C_MINT), emissiveIntensity: 1.0,
+        roughness: 0.25, metalness: 0.55, flatShading: true
+      })
+    );
+    shipBody.rotation.x = -Math.PI / 2;   // point the nose down -z (into the tunnel)
+    ship.add(shipBody);
+    // glowing halo ring around the ship
+    const shipHalo = new THREE.Mesh(
+      new THREE.TorusGeometry(0.7, 0.07, 8, 16),
+      new THREE.MeshBasicMaterial({ color: C_MINT, transparent: true, opacity: 0.7 })
+    );
+    ship.add(shipHalo);
+    const shipLight = new THREE.PointLight(C_MINT, 1.4, 10, 2);
+    ship.add(shipLight);
+    // orient the ship so "down toward the wall" = away from centre
+    ship.rotation.z = Math.PI; // cone base points outward to the wall
+
+    // ---------------------------------------------------------------- ring pool
+    // Each ring is a torus with one open gap segment the ship must line up with.
+    // We model a ring as a set of SEGMENTS short box "panels"; we hide the
+    // panels that form the gap so the ship can pass through there.
+    const PANEL_W = (2 * Math.PI * TUBE_R) / SEGMENTS * 0.92;
+    const panelGeo = new THREE.BoxGeometry(PANEL_W, 0.9, 0.7);
+    function makePanelMat(hex){
+      return new THREE.MeshStandardMaterial({
+        color: hex, emissive: new THREE.Color(hex), emissiveIntensity: 0.6,
+        roughness: 0.3, metalness: 0.5
+      });
+    }
+    const RING_COLORS = [C_RED, C_AMBER];
+
+    const RING_POOL = 18;
+    const rings = [];
+    for (let i = 0; i < RING_POOL; i++){
+      const group = new THREE.Group();
+      group.visible = false;
+      const panels = [];
+      const mat = makePanelMat(C_RED);
+      for (let s = 0; s < SEGMENTS; s++){
+        const p = new THREE.Mesh(panelGeo, mat);
+        const ang = (s / SEGMENTS) * Math.PI * 2;
+        // panel sits just inside the wall, rotated to face the centre
+        p.position.set(Math.cos(ang) * (TUBE_R - 0.45), Math.sin(ang) * (TUBE_R - 0.45), 0);
+        p.rotation.z = ang - Math.PI / 2;
+        group.add(p);
+        panels.push(p);
+      }
+      scene.add(group);
+      rings.push({ group, panels, mat, active: false, gap: 0, scored: false, passed: false });
+    }
+
+    // ---------------------------------------------------------------- particles
+    const sparkGeo = new THREE.SphereGeometry(0.11, 6, 6);
+    const sparks = [];
+    function burst(x, y, z, hex, n = 18){
+      const m = new THREE.MeshBasicMaterial({ color: hex });
+      for (let i = 0; i < n; i++){
+        const s = new THREE.Mesh(sparkGeo, m); s.position.set(x, y, z);
+        scene.add(s);
+        sparks.push({ mesh: s, vx: srange(-0.22, 0.22), vy: srange(-0.22, 0.22),
+          vz: srange(-0.05, 0.28), life: 32 });
+      }
+    }
+
+    // ---------------------------------------------------------------- game state
+    let angle;        // current ship orbit angle (radians)
+    let targetAngle;  // where the ship is gliding to
+    let speed, dist, score, level;
+    let over, paused, started, running;
+    let spawnZ;       // z of the next ring to place
+    let t = 0;
+
+    function setPill(){ scoreEl.textContent = score; }
+
+    function freeAll(){
+      for (const r of rings){ r.active = false; r.group.visible = false; }
+      for (let i = sparks.length - 1; i >= 0; i--){ scene.remove(sparks[i].mesh); }
+      sparks.length = 0;
+    }
+
+    const overEl = document.getElementById('over');
+    const overTitle = document.getElementById('overTitle');
+    const againLabel = document.getElementById('againLabel');
+
+    function reset(){
+      seed = SEED0;
+      angle = Math.PI / 2;            // start at the top of the circle
+      targetAngle = angle;
+      speed = 0.62; dist = 0; score = 0; level = 1;
+      over = false; paused = false; started = false; running = false;
+      spawnZ = SPAWN_Z;
+      freeAll();
+      // pre-fill the tunnel ahead with a runway of rings
+      for (let z = SPAWN_Z; z <= -RING_GAP * 2; z += RING_GAP){ placeRing(z); }
+      shipPivot.rotation.z = 0;
+      ship.position.set(0, SHIP_ORBIT, 0);
+      setPill();
+      overEl.classList.remove('gx-show');
+      startPrompt.classList.remove('hide');
+    }
+
+    function beginRun(){
+      if (started || over) return;
+      started = true; running = true;
+      startPrompt.classList.add('hide');
+    }
+
+    function placeRing(z){
+      const r = rings.find(x => !x.active);
+      if (!r) return;
+      r.active = true; r.scored = false; r.passed = false;
+      r.group.visible = true;
+      r.group.position.z = z;
+      // pick a gap centre segment + width that narrows as the level rises
+      const gapWidth = Math.max(2, 4 - Math.floor(level / 3)); // open panels (2..4)
+      const gapStart = sint(SEGMENTS);
+      r.gap = gapStart;
+      r.gapWidth = gapWidth;
+      const hex = RING_COLORS[sint(RING_COLORS.length)];
+      r.mat.color.set(hex);
+      r.mat.emissive.set(hex);
+      // open the gap: hide the panels in the gap window
+      for (let s = 0; s < SEGMENTS; s++){
+        let open = false;
+        for (let g = 0; g < gapWidth; g++){
+          if (((gapStart + g) % SEGMENTS) === s){ open = true; break; }
+        }
+        r.panels[s].visible = !open;
+      }
+      // the centre angle of the gap (for scoring / lining up)
+      r.gapAngle = ((gapStart + (gapWidth - 1) / 2) / SEGMENTS) * Math.PI * 2;
+    }
+
+    function showFlash(txt){
+      flashEl.textContent = txt;
+      flashEl.classList.add('show');
+      clearTimeout(showFlash._t);
+      showFlash._t = setTimeout(() => flashEl.classList.remove('show'), 950);
+    }
+
+    function end(hx, hy){
+      if (over) return;
+      over = true; started = false; running = false;
+      const isBest = score > best;
+      if (isBest){ best = score; localStorage.setItem(BEST_KEY, best); bestEl.textContent = best; }
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('bestScore').textContent = best;
+      document.getElementById('newBest').textContent = (isBest && score > 0) ? 'New best!' : '';
+      overTitle.textContent = 'Game over';
+      againLabel.textContent = 'Play again';
+      overEl.classList.add('gx-show');
+      burst(hx, hy, ship.getWorldPosition(new THREE.Vector3()).z, C_RED, 32);
+    }
+
+    function togglePause(){
+      if (over || !started) return;
+      paused = !paused; running = !paused;
+      if (paused){
+        overTitle.textContent = 'Paused';
+        document.getElementById('finalScore').textContent = score;
+        document.getElementById('bestScore').textContent = best;
+        document.getElementById('newBest').textContent = '';
+        againLabel.textContent = 'Resume';
+        overEl.classList.add('gx-show');
+      } else {
+        overEl.classList.remove('gx-show');
+      }
+    }
+
+    function primaryAction(){
+      if (paused){ togglePause(); return; }
+      if (over){ reset(); return; }
+      if (!started){ beginRun(); return; }
+    }
+
+    // ---------------------------------------------------------------- rotation input
+    const SEG_ANG = (Math.PI * 2) / SEGMENTS;
+    function rotateBy(rad){
+      if (over || paused) return;
+      if (!started){ beginRun(); }
+      targetAngle += rad;
+    }
+    function nudge(dir){ rotateBy(dir * SEG_ANG); }  // one segment per key press
+
+    // drag to rotate continuously around the wall
+    let dragAccum = 0;
+    onDrag(renderer.domElement, {
+      start: () => { dragAccum = 0; if (!started && !over && !paused) beginRun(); },
+      move: (e) => {
+        if (over || paused) return;
+        // horizontal drag maps to rotation; scale by viewport width
+        targetAngle += (e.dx / innerWidth) * Math.PI * 2.4;
+      },
+      end: () => { dragAccum = 0; }
+    });
+    // tap (no real drag) restarts/begins
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (over) primaryAction();
+    });
+
+    const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
+      'a','d','w','s','A','D','W','S','p','P','r','R'];
+    addEventListener('keydown', (e) => {
+      const k = e.key;
+      if (GAME_KEYS.includes(k)) e.preventDefault();
+      if (k === 'r' || k === 'R'){ reset(); return; }
+      if (k === 'p' || k === 'P'){ togglePause(); return; }
+      if (k === 'ArrowLeft'  || k === 'a' || k === 'A' || k === 'w' || k === 'W' || k === 'ArrowUp'){ nudge(1);  return; }
+      if (k === 'ArrowRight' || k === 'd' || k === 'D' || k === 's' || k === 'S' || k === 'ArrowDown'){ nudge(-1); return; }
+      if (k === ' ' || k === 'Enter'){ primaryAction(); return; }
+    });
+    document.getElementById('again').addEventListener('click', (e) => {
+      e.stopPropagation(); primaryAction();
+    });
+
+    // ---------------------------------------------------------------- resize
+    function resize(){
+      const w = innerWidth, h = innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+    addEventListener('resize', resize); resize();
+
+    // ---------------------------------------------------------------- helpers
+    // shortest signed angular difference a->b in [-PI, PI]
+    function angDiff(a, b){
+      let d = (b - a) % (Math.PI * 2);
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      return d;
+    }
+
+    // ---------------------------------------------------------------- loop
+    function animate(){
+      requestAnimationFrame(animate);
+      t += 1;
+
+      // continuous neon scroll of the tunnel texture for a sense of motion
+      tubeTex.offset.y += speed * 0.0016 * (running ? 1 : 0.25);
+
+      if (running){
+        // speed ramp + level flashes
+        dist += speed;
+        score = Math.floor(dist * 0.1);
+        setPill();
+        const newLevel = 1 + Math.floor(dist / 380);
+        if (newLevel > level){
+          level = newLevel;
+          speed = Math.min(2.1, 0.62 + (level - 1) * 0.16);
+          showFlash('Speed up · Lv ' + level);
+        }
+
+        // glide the ship toward the target orbit angle
+        angle += angDiff(angle, targetAngle) * 0.22;
+        shipPivot.rotation.z = angle - Math.PI / 2;
+
+        // move rings toward the camera; recycle + spawn fresh ones ahead
+        for (const r of rings){
+          if (!r.active) continue;
+          r.group.position.z += speed;
+          // slow spin on the ring for life
+          r.group.rotation.z += 0.002;
+          if (r.group.position.z > DESPAWN_Z){
+            r.active = false; r.group.visible = false;
+            continue;
+          }
+          // collision / scoring as the ring crosses the ship plane
+          if (!r.passed && r.group.position.z >= SHIP_Z - 1.2){
+            r.passed = true;
+            // ship orbit angle relative to ring's own rotation
+            const shipA = (angle - r.group.rotation.z);
+            // closest panel index to the ship
+            let idx = Math.round((shipA % (Math.PI * 2)) / SEG_ANG);
+            idx = ((idx % SEGMENTS) + SEGMENTS) % SEGMENTS;
+            const panel = r.panels[idx];
+            if (panel.visible){
+              // hit a solid panel -> game over
+              const wp = panel.getWorldPosition(new THREE.Vector3());
+              end(wp.x, wp.y);
+            } else {
+              // slipped through the gap -> award + a little spark
+              score += 5; dist += 16; setPill();
+              const sp = ship.getWorldPosition(new THREE.Vector3());
+              burst(sp.x, sp.y, sp.z, C_MINT, 10);
+            }
+          }
+        }
+
+        // keep a steady stream of rings spawning far ahead
+        // find the furthest active ring and add one RING_GAP beyond it
+        let minZ = Infinity;
+        for (const r of rings){ if (r.active) minZ = Math.min(minZ, r.group.position.z); }
+        if (minZ === Infinity || minZ > SPAWN_Z + RING_GAP){
+          placeRing(Math.min(SPAWN_Z, minZ - RING_GAP));
+        }
+      }
+
+      // ship idle motion (always, for the attract screen too)
+      shipHalo.rotation.z += 0.05;
+      shipBody.rotation.z = Math.sin(t * 0.12) * 0.12;
+      if (!running){
+        // slow auto-orbit on the attract / paused / dead screens
+        if (!over) targetAngle += 0.004;
+        angle += angDiff(angle, targetAngle) * 0.12;
+        shipPivot.rotation.z = angle - Math.PI / 2;
+      }
+
+      // mint glow rides with the ship
+      const sw = ship.getWorldPosition(new THREE.Vector3());
+      mintGlow.position.copy(sw); mintGlow.position.z += 2;
+      headlamp.intensity = 1.8 + Math.sin(t * 0.18) * 0.25;
+
+      // camera follows the ship's orbit so it stays framed near the bottom-ish
+      const camA = angle;
+      const camTargetX = Math.cos(camA) * 1.4;
+      const camTargetY = Math.sin(camA) * 1.4;
+      camera.position.x += (camTargetX - camera.position.x) * 0.08;
+      camera.position.y += (camTargetY - camera.position.y) * 0.08;
+      camera.up.set(Math.cos(camA), Math.sin(camA), 0);
+      camera.lookAt(camTargetX * 0.4, camTargetY * 0.4, -50);
+
+      // particles
+      for (let i = sparks.length - 1; i >= 0; i--){
+        const s = sparks[i];
+        s.mesh.position.x += s.vx; s.mesh.position.y += s.vy; s.mesh.position.z += s.vz;
+        s.life--;
+        if (s.life <= 0){ scene.remove(s.mesh); sparks.splice(i, 1); }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    reset(); animate();
+  </script>
+</body>
+</html>

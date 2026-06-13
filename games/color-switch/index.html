@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>Color Switch — Gamf</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <style>
+    /* genre accent for this game (3D = mint) */
+    body{--gx-accent:#5ad1a8}
+    html,body{height:100%;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+    canvas{display:block;width:100%;height:100%;touch-action:none}
+    /* tap-to-start flash — game-specific custom element */
+    .cs-start{position:fixed;inset:0;z-index:5;display:grid;place-items:center;pointer-events:none}
+    .cs-start.hide{display:none}
+    .cs-start b{font-family:var(--gx-font-display);font-size:clamp(18px,5vw,28px);letter-spacing:2px;
+      text-transform:uppercase;color:var(--gx-text);text-align:center;line-height:1.3;
+      padding:14px 22px;border:1px solid var(--gx-line-2);border-radius:var(--r-4);
+      background:color-mix(in srgb,var(--gx-screen) 78%,transparent);
+      animation:gx-blink 1.4s steps(1) infinite}
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> 3D</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Score <b id="score">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> <b id="best">0</b></span>
+  </header>
+
+  <div class="cs-start" id="startMsg"><b>Tap or press Space<br>to hop the ball up</b></div>
+
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-up"/></svg> tap / space — hop</span>
+    <span class="gx-hint__chip">match the arc color</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
+  </div>
+
+  <!-- pause modal -->
+  <div class="gx-modal" id="paused">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title">Paused</h2>
+      <div class="gx-modal__row">Press <b>P</b> to resume</div>
+    </div>
+  </div>
+
+  <!-- game-over modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title">Game over</h2>
+      <div class="gx-modal__row">Score <b id="finalScore">0</b></div>
+      <div class="gx-modal__row">Best <b id="bestScore">0</b></div>
+      <div class="gx-modal__new" id="newBest" style="display:none">New best!</div>
+      <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> Play again</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { onTap } from './touch.js';
+
+    // ---------- seeded LCG (deterministic — no Math.random / Date) ----------
+    let seed = 0x1A2B3C4D >>> 0;
+    function srnd(){ seed = (1664525*seed + 1013904223) >>> 0; return seed/4294967296; }
+    function srange(a,b){ return a + (b-a)*srnd(); }
+    function spick(arr){ return arr[Math.floor(srnd()*arr.length)]; }
+
+    // ---------- palette (arcade) ----------
+    // Ball + ring arcs use 4 vivid colors that sit over the warm-dark scene.
+    const COLORS = [0xd8412b, 0xe8a23a, 0x5ad1a8, 0x6c8cff]; // red, amber, mint, blue
+    const COLOR_OBJ = COLORS.map(c=>new THREE.Color(c));
+
+    // ---------- high score ----------
+    const BEST_KEY = 'gamf-3d-color-switch-best';
+    let best = +(localStorage.getItem(BEST_KEY) || 0);
+    document.getElementById('best').textContent = best;
+
+    // ---------- renderer / scene ----------
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const bgTex = (()=>{ const c=document.createElement('canvas'); c.width=4; c.height=256;
+      const ctx=c.getContext('2d'); const g=ctx.createLinearGradient(0,0,0,256);
+      g.addColorStop(0,'#241712'); g.addColorStop(0.55,'#17110d'); g.addColorStop(1,'#0c0907');
+      ctx.fillStyle=g; ctx.fillRect(0,0,4,256);
+      const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; })();
+    scene.background = bgTex;
+    scene.fog = new THREE.Fog(0x15110e, 18, 46);
+
+    const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 200);
+    camera.position.set(0, 4, 12);
+
+    scene.add(new THREE.HemisphereLight(0xf4ede1, 0x1b0f0c, 0.85));
+    const dir = new THREE.DirectionalLight(0xfff1d8, 1.05); dir.position.set(5, 14, 9);
+    dir.castShadow = true; dir.shadow.mapSize.set(1024,1024);
+    dir.shadow.camera.near = 1; dir.shadow.camera.far = 70;
+    dir.shadow.camera.left = -12; dir.shadow.camera.right = 12;
+    dir.shadow.camera.top = 14; dir.shadow.camera.bottom = -14;
+    scene.add(dir);
+    const rim = new THREE.DirectionalLight(0xe8a23a, 0.3); rim.position.set(-8,4,-6); scene.add(rim);
+
+    // ---------- ball ----------
+    const ballGeo = new THREE.SphereGeometry(0.5, 28, 20);
+    const ballMat = new THREE.MeshStandardMaterial({ color:COLORS[0], roughness:0.28, metalness:0.3,
+      emissive:new THREE.Color(COLORS[0]).multiplyScalar(0.35) });
+    const ball = new THREE.Mesh(ballGeo, ballMat);
+    ball.castShadow = true; scene.add(ball);
+    const ballGlow = new THREE.PointLight(COLORS[0], 1.3, 7); scene.add(ballGlow);
+    function setBallColor(ci){
+      ball.userData.ci = ci;
+      ballMat.color.copy(COLOR_OBJ[ci]);
+      ballMat.emissive.copy(COLOR_OBJ[ci]).multiplyScalar(0.35);
+      ballGlow.color.copy(COLOR_OBJ[ci]);
+    }
+
+    // ---------- rings ----------
+    // Each ring is a flat torus split into 4 colored arc-quarters; it spins.
+    // The ball passes through the center hole; only the arc directly in front
+    // (world angle ≈ -PI/2, i.e. facing the camera/+z at the bottom) matters.
+    // We test the color of the arc occupying the ball's pass-through sector.
+    const RING_GAP = 4.4;     // vertical distance between rings
+    const RING_R = 2.5;       // torus center radius (hole radius ≈ RING_R - tube)
+    const TUBE = 0.42;        // torus tube radius
+    const ARCS = 4;           // quarters
+    const arcMats = COLOR_OBJ.map(c=>new THREE.MeshStandardMaterial({
+      color:c, roughness:0.4, metalness:0.25, emissive:c.clone().multiplyScalar(0.16) }));
+
+    const NUM_RINGS = 140;    // generous run length
+    let rings = [];           // {grp, y, order:[ci..], spin, passed}
+
+    // The "pass sector" is the world angle at the bottom of the ring nearest the
+    // camera — where the ball physically threads through. Torus is built in the
+    // XY plane (faces +z), arc a spans angle [a*90°, (a+1)*90°). The ball threads
+    // at world angle = -90° (pointing down, toward viewer-bottom). Account for spin.
+    function makeRing(index, y){
+      const grp = new THREE.Group();
+      grp.position.y = y;
+      const order = [];
+      // pick a shuffled-ish order of the 4 colors so each quarter is distinct
+      const pool = [0,1,2,3];
+      for(let i=pool.length-1;i>0;i--){ const j=Math.floor(srnd()*(i+1)); const t=pool[i]; pool[i]=pool[j]; pool[j]=t; }
+      for(let a=0;a<ARCS;a++){
+        const ci = pool[a];
+        order.push(ci);
+        const a0 = (a/ARCS)*Math.PI*2;
+        const geo = new THREE.TorusGeometry(RING_R, TUBE, 14, 30, Math.PI*2/ARCS);
+        const m = new THREE.Mesh(geo, arcMats[ci]);
+        m.rotation.z = a0;       // rotate quarter into place around z (torus is XY plane)
+        m.castShadow = true; m.receiveShadow = true;
+        grp.add(m);
+      }
+      // gentle spin; alternate direction; faster as you climb
+      const baseSpin = 0.012 + Math.min(0.03, index*0.0006);
+      const spin = (index%2===0 ? 1 : -1) * srange(baseSpin, baseSpin+0.012);
+      grp.rotation.z = srange(0, Math.PI*2);
+      scene.add(grp);
+      return { grp, y, order, spin, passed:false, index };
+    }
+
+    function buildRings(){
+      rings.forEach(r=>scene.remove(r.grp)); rings = [];
+      for(let i=0;i<NUM_RINGS;i++) makeRing(i, FIRST_RING_Y + i*RING_GAP);
+    }
+    const FIRST_RING_Y = 3.0;
+
+    // Given a ring, find the color index of the arc the ball threads through.
+    // Ball passes at fixed world angle = -PI/2 (bottom of ring, toward viewer).
+    // Arc 'a' base angle = a*90° + grp.rotation.z. Find which arc covers -90°.
+    function arcColorAt(ring){
+      const TWO = Math.PI*2;
+      const seg = TWO/ARCS;
+      // angle of the pass point in the ring's local frame:
+      let local = (-Math.PI/2) - ring.grp.rotation.z;
+      local = ((local % TWO) + TWO) % TWO;       // [0,2π)
+      const a = Math.floor(local/seg) % ARCS;
+      return ring.order[a];
+    }
+
+    // ---------- particles ----------
+    const sparkGeo = new THREE.SphereGeometry(0.07, 6, 6);
+    const sparks = [];
+    function burst(x,y,z,colHex,n=14){
+      const m = new THREE.MeshBasicMaterial({ color:colHex });
+      for(let i=0;i<n;i++){ const s=new THREE.Mesh(sparkGeo,m); s.position.set(x,y,z);
+        scene.add(s); sparks.push({ mesh:s, vx:srange(-0.13,0.13), vy:srange(-0.04,0.18),
+          vz:srange(-0.13,0.13), life:30 }); }
+    }
+
+    // ---------- floating color pickups ----------
+    // A small spinning prism between rings; threading it swaps the ball's color.
+    const pickups = [];
+    const pickGeo = new THREE.OctahedronGeometry(0.42, 0);
+    function makePickup(y){
+      const ci = Math.floor(srnd()*COLORS.length);
+      const m = new THREE.MeshStandardMaterial({ color:COLOR_OBJ[ci], roughness:0.2, metalness:0.4,
+        emissive:COLOR_OBJ[ci].clone().multiplyScalar(0.4) });
+      const mesh = new THREE.Mesh(pickGeo, m); mesh.position.set(0,y,0); mesh.castShadow=true;
+      scene.add(mesh);
+      pickups.push({ mesh, y, ci, taken:false });
+    }
+    function buildPickups(){
+      pickups.forEach(p=>scene.remove(p.mesh)); pickups.length=0;
+      // a pickup roughly every 2nd gap, offset to the midpoint
+      for(let i=1;i<NUM_RINGS;i+=2){
+        makePickup(FIRST_RING_Y + i*RING_GAP - RING_GAP/2);
+      }
+    }
+
+    // ---------- game state ----------
+    let score, vy, ballY, over, paused, started, launched;
+    const scoreEl = document.getElementById('score');
+    const startMsg = document.getElementById('startMsg');
+
+    const GRAVITY = 0.011;
+    const HOP_V = 0.30;          // upward impulse per tap
+    const MAX_FALL = -0.55;
+
+    function reset(){
+      seed = 0x1A2B3C4D >>> 0;
+      score = 0; vy = 0; ballY = 0; over = false; paused = false; started = false; launched = false;
+      scoreEl.textContent = '0';
+      document.getElementById('over').classList.remove('gx-show');
+      document.getElementById('paused').classList.remove('gx-show');
+      startMsg.classList.remove('hide');
+      // clear particles
+      for(const s of sparks) scene.remove(s.mesh); sparks.length = 0;
+      buildRings(); buildPickups();
+      setBallColor(0);
+      ball.position.set(0, ballY, 0);
+      camY = ballY + 3.2;
+      camera.position.set(0, camY, 12);
+    }
+
+    function end(){
+      if(over) return;
+      over = true;
+      const isBest = score > best;
+      if(isBest){ best = score; localStorage.setItem(BEST_KEY, best);
+        document.getElementById('best').textContent = best; }
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('bestScore').textContent = best;
+      document.getElementById('newBest').style.display = (isBest && score>0) ? 'block' : 'none';
+      document.getElementById('over').classList.add('gx-show');
+      burst(ball.position.x, ball.position.y, ball.position.z, 0xd8412b, 26);
+    }
+
+    function togglePause(){ if(over || !started) return; paused = !paused;
+      document.getElementById('paused').classList.toggle('gx-show', paused); }
+
+    function hop(){
+      if(over || paused) return;
+      if(!started){ started = true; launched = true; startMsg.classList.add('hide'); }
+      vy = HOP_V;
+    }
+
+    // ---------- input ----------
+    onTap(renderer.domElement, ()=>{ hop(); });
+
+    const GAME_KEYS = new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','Enter',
+      'w','a','s','d','W','A','S','D','p','P','r','R']);
+    addEventListener('keydown', (e)=>{
+      const k = e.key;
+      if(GAME_KEYS.has(k)) e.preventDefault();
+      if(k==='r'||k==='R'){ reset(); return; }
+      if(k==='p'||k==='P'){ togglePause(); return; }
+      if(k===' '||k==='Enter'||k==='ArrowUp'||k==='w'||k==='W'){ hop(); return; }
+    });
+    document.getElementById('again').onclick = (e)=>{ e.stopPropagation(); reset(); };
+    // tapping the game-over backdrop also restarts
+    document.getElementById('over').addEventListener('pointerdown', (e)=>{
+      if(e.target.id==='over') reset();
+    });
+
+    function resize(){ const w=innerWidth, h=innerHeight; renderer.setSize(w,h);
+      camera.aspect = w/h; camera.updateProjectionMatrix(); }
+    addEventListener('resize', resize); resize();
+
+    // ---------- main loop ----------
+    let camY = 0;
+    function animate(){
+      requestAnimationFrame(animate);
+
+      // spin rings always (even on start screen, for life)
+      for(const r of rings) r.grp.rotation.z += r.spin;
+      for(const p of pickups){ p.mesh.rotation.y += 0.05; p.mesh.rotation.x += 0.03; }
+
+      if(started && !paused && !over){
+        // physics
+        vy -= GRAVITY;
+        if(vy < MAX_FALL) vy = MAX_FALL;
+
+        const prevY = ballY;
+        ballY += vy;
+
+        // ground / fall-off: if the ball drops well below the last passed ring, end
+        // (you must keep hopping up). Floor is just below the first ring start.
+        if(ballY < -2.5){ ball.position.set(0, ballY, 0); end(); return; }
+
+        // ring collisions: detect upward crossings through a ring's plane
+        for(const r of rings){
+          if(r.passed) continue;
+          // crossing upward through the ring plane this frame?
+          if(prevY < r.y && ballY >= r.y){
+            const ringCi = arcColorAt(r);
+            if(ringCi === ball.userData.ci){
+              // match — pass through, score
+              r.passed = true;
+              score += 1; scoreEl.textContent = score;
+              burst(0, r.y, 0, COLORS[ringCi], 12);
+              // light up the cleared ring briefly via emissive flash
+              for(const child of r.grp.children){
+                child.material.emissive.copy(child.material.color).multiplyScalar(0.55);
+              }
+            } else {
+              // wrong color — splat
+              ballY = r.y; vy = 0; ball.position.set(0, ballY, 0);
+              burst(0, r.y, 0, COLORS[ringCi], 22);
+              end(); return;
+            }
+          }
+        }
+
+        // pickup collisions (swap ball color while passing through)
+        for(const p of pickups){
+          if(p.taken) continue;
+          if(prevY < p.y && ballY >= p.y){
+            p.taken = true;
+            setBallColor(p.ci);
+            burst(0, p.y, 0, COLORS[p.ci], 16);
+            scene.remove(p.mesh);
+          }
+        }
+
+        // win-guard: cleared everything
+        if(ballY > FIRST_RING_Y + (NUM_RINGS-1)*RING_GAP + 4){ end(); return; }
+      }
+
+      // ball follows ballY (fixed x/z at center)
+      ball.position.set(0, ballY, 0);
+      ballGlow.position.set(0, ballY+0.2, 0.6);
+
+      // camera trails the ball upward (never drops below start view)
+      const wantCamY = Math.max(3.2, ballY + 3.2);
+      camY += (wantCamY - camY) * 0.09;
+      camera.position.y = camY;
+      camera.lookAt(0, camY - 3.0, 0);
+
+      // fade emissive flash back down on passed rings
+      for(const r of rings){
+        if(!r.passed) continue;
+        for(const child of r.grp.children){
+          const target = child.material.color.clone().multiplyScalar(0.16);
+          child.material.emissive.lerp(target, 0.08);
+        }
+      }
+
+      // particles
+      for(let i=sparks.length-1;i>=0;i--){ const s=sparks[i];
+        s.mesh.position.x += s.vx; s.mesh.position.y += s.vy; s.mesh.position.z += s.vz; s.vy -= 0.012;
+        s.life--; if(s.life<=0){ scene.remove(s.mesh); sparks.splice(i,1); } }
+
+      renderer.render(scene, camera);
+    }
+
+    reset();
+    animate();
+  </script>
+</body>
+</html>
