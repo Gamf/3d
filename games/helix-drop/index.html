@@ -98,7 +98,10 @@
       ctx.fillStyle=g; ctx.fillRect(0,0,4,256);
       const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; })();
     scene.background=bgTex;
-    scene.fog=new THREE.Fog(0x0e0f13,16,40);
+    // Fog adds depth to the far tower, but must NOT wash out the rings the player
+    // needs to read to plan rotations. The active play column sits ~12-27 units from
+    // the camera, so start the fog well beyond that and end it far out.
+    scene.fog=new THREE.Fog(0x0e0f13,30,80);
 
     const camera=new THREE.PerspectiveCamera(55,1,0.1,200);
     camera.position.set(0,4,11);

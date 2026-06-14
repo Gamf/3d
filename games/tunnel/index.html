@@ -142,9 +142,12 @@
     // ---------------------------------------------------------------- scene + fog
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(C_BG);
-    scene.fog = new THREE.Fog(C_BG, 40, 170);
+    // Fog must reach beyond where rings spawn (SPAWN_Z, ~219 units ahead of the
+    // camera) or freshly placed rings fade fully to the background and never
+    // appear. Keep a near haze for depth but push 'far' past the spawn distance.
+    scene.fog = new THREE.Fog(C_BG, 60, 300);
 
-    const camera = new THREE.PerspectiveCamera(74, 1, 0.1, 360);
+    const camera = new THREE.PerspectiveCamera(74, 1, 0.1, 500);
     camera.position.set(0, 0, 9);
     camera.lookAt(0, 0, -40);
 

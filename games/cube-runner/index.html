@@ -119,9 +119,12 @@
     const scene = new THREE.Scene();
     const FOG = 0x05060b;
     scene.background = new THREE.Color(FOG);
-    scene.fog = new THREE.Fog(FOG, 22, 95);
+    // Fog far must reach past the spawn point (~168 units from the camera) or
+    // every freshly spawned obstacle is fully fogged to the background and
+    // never appears. Keep a soft atmospheric depth, but let gameplay be seen.
+    scene.fog = new THREE.Fog(FOG, 40, 230);
 
-    const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 300);
+    const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 400);
     camera.position.set(0, 4.4, 8);
     camera.lookAt(0, 1.0, -18);
 
@@ -139,24 +142,13 @@
     accentLight.position.set(0, 2.2, 2);
     scene.add(accentLight);
 
-    // ---------------------------------------------------------------- floor (scrolling neon grid)
-    const gridTex = (() => {
-      const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#070a12'; ctx.fillRect(0, 0, 128, 128);
-      ctx.strokeStyle = 'rgba(90,209,168,0.55)'; ctx.lineWidth = 4;
-      ctx.strokeRect(2, 2, 124, 124);
-      const t = new THREE.CanvasTexture(c);
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(2, 60);
-      t.colorSpace = THREE.SRGBColorSpace;
-      return t;
-    })();
+    // ---------------------------------------------------------------- floor (plain solid ground)
+    // No grid lines — a subtle dark solid plane keeps the focus on the cubes
+    // and avoids the "grid everywhere" look.
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(TRACK_HALF * 2, 360),
       new THREE.MeshStandardMaterial({
-        map: gridTex, color: 0x10131f, roughness: 0.55, metalness: 0.35,
-        emissive: new THREE.Color(ACCENT).multiplyScalar(0.05), emissiveMap: gridTex
+        color: 0x0c1018, roughness: 0.85, metalness: 0.2
       })
     );
     floor.rotation.x = -Math.PI / 2;
@@ -187,10 +179,11 @@
     player.castShadow = true;
     player.position.set(0, 0.7, PLAYER_Z);
     scene.add(player);
-    // wireframe halo for a "bloom" feel
+    // soft translucent shell for a "bloom" feel (no wireframe grid lines)
     const halo = new THREE.Mesh(
       new THREE.BoxGeometry(1.32, 1.32, 1.32),
-      new THREE.MeshBasicMaterial({ color: ACCENT, wireframe: true, transparent: true, opacity: 0.45 })
+      new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.16,
+        side: THREE.BackSide, depthWrite: false })
     );
     player.add(halo);
     const playerLight = new THREE.PointLight(ACCENT, 1.6, 9, 2);
@@ -205,10 +198,13 @@
         roughness: 0.3, metalness: 0.4
       });
     }
+    // One shared material per palette colour — reused across spawns so we never
+    // allocate (and leak) a fresh material every time an obstacle appears.
+    const OBST_MATS = OBST_COLORS.map(makeObstMat);
     const POOL = 90;
     const obstacles = [];   // {mesh, active, lane}
     for (let i = 0; i < POOL; i++) {
-      const m = new THREE.Mesh(obstGeo, makeObstMat(0xff5d6c));
+      const m = new THREE.Mesh(obstGeo, OBST_MATS[0]);
       m.castShadow = true; m.visible = false; m.position.y = 0.9;
       scene.add(m);
       obstacles.push({ mesh: m, active: false, lane: 1 });
@@ -331,7 +327,7 @@
         if (!o) continue;
         o.active = true; o.lane = l;
         o.mesh.visible = true;
-        o.mesh.material = makeObstMat(spick(OBST_COLORS));
+        o.mesh.material = spick(OBST_MATS);
         o.mesh.position.set(LANES[l], 0.9, SPAWN_Z);
         o.mesh.rotation.set(srange(0, 6.28), srange(0, 6.28), 0);
       }
@@ -422,9 +418,6 @@
         // distance + survival score
         score = Math.floor(dist) ;
         setPill();
-
-        // scroll the floor + rails texture for a sense of motion
-        gridTex.offset.y -= speed * 0.025;
 
         // spawn cadence shortens as speed grows
         spawnTimer -= speed;
