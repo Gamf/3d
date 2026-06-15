@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#3a2c20">
   <title>Orbit Dodge — Gamf</title>
   <meta name="description" content="Your ship circles a glowing planet while asteroids rain in from deep space. Drag to swing the ship around the orbit and stay clear of every incoming rock. Survival time is your score.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,29 +11,30 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    /* genre accent for this game (3D = mint) */
-    body { --gx-accent: #5ad1a8; }
+    /* genre accent for this game (GAMF Quarterly — oxblood) */
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none;
       -webkit-user-select: none; user-select: none; }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     /* "danger" warning flash (purely cosmetic, no interaction) */
     .ob-flash { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 70px);
       text-align: center; z-index: 4; pointer-events: none;
-      font-family: var(--gx-font-display); font-weight: 400; font-size: clamp(26px, 7vw, 44px);
-      letter-spacing: 1px; text-transform: uppercase;
-      color: var(--gx-amber);
-      text-shadow: 0 0 22px color-mix(in srgb, var(--gx-amber) 70%, transparent);
+      font-family: var(--display); font-weight: 600; font-size: clamp(26px, 7vw, 44px);
+      letter-spacing: .5px;
+      color: var(--accent, #9b3a22);
       opacity: 0; transform: translateY(-6px); transition: opacity .25s ease, transform .25s ease; }
     .ob-flash.show { opacity: 1; transform: translateY(0); }
     /* "tap to start" attract prompt */
     .ob-start { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center;
       padding: 24px; pointer-events: none; text-align: center; }
-    .ob-start__card { font-family: var(--gx-font-display); color: var(--gx-text);
-      text-transform: uppercase; letter-spacing: 2px; font-size: clamp(34px, 9vw, 64px);
-      line-height: .92; }
-    .ob-start__sub { display: block; margin-top: 14px; font-family: var(--gx-font-mono);
-      font-weight: 700; font-size: clamp(11px, 3vw, 14px); letter-spacing: 2px;
-      color: var(--gx-red); animation: gx-blink 1.4s steps(1) infinite; }
+    .ob-start__card { font-family: var(--display); color: var(--ink, #221f17);
+      font-weight: 900; font-size: clamp(34px, 9vw, 64px);
+      line-height: .95; }
+    .ob-start__sub { display: block; margin-top: 16px; font-family: var(--body);
+      font-style: italic; font-weight: 500; font-size: clamp(13px, 3.4vw, 16px);
+      letter-spacing: .02em; color: var(--accent, #9b3a22);
+      animation: ob-blink 1.4s steps(1) infinite; }
+    @keyframes ob-blink { 50% { opacity: .35; } }
     .ob-start.hide { display: none; }
   </style>
 </head>
@@ -117,11 +118,14 @@
     bestEl.textContent = best;
 
     // ---------------------------------------------------------------- palette
-    const C_BG    = 0x15110e;   // canvas background (arcade warm near-black)
-    const C_RED   = 0xd8412b;   // accent red (asteroids / danger)
-    const C_AMBER = 0xe8a23a;   // accent amber (planet glow / warnings)
-    const C_MINT  = 0x5ad1a8;   // 3D genre accent (player ship)
-    const C_BONE  = 0xf4ede1;   // bone text / sun
+    // GAMF Quarterly — warm 1970s print catalogue. Warm dusk scene; earthy
+    // matte objects; no neon, no glow, no gradients.
+    const C_BG    = 0x3a2c20;   // warm dusk brown — solid scene.background
+    const C_RED   = 0x9b3a22;   // oxblood — asteroids / danger
+    const C_AMBER = 0xc8923a;   // ochre — planet warmth / warnings
+    const C_SHIP  = 0xa4623a;   // clay — the player ship
+    const C_OLIVE = 0x6f6a3b;   // olive — orbit ring guide
+    const C_BONE  = 0xefe6d2;   // cream — warm sunlight
 
     // ---------------------------------------------------------------- geometry config
     const PLANET_R   = 4.2;     // radius of the planet
@@ -147,33 +151,16 @@
     camera.position.set(0, 13.5, 17);
     camera.lookAt(0, 0, 0);
 
-    // ---------------------------------------------------------------- starfield
-    (() => {
-      const N = 320;
-      const pos = new Float32Array(N * 3);
-      for (let i = 0; i < N; i++){
-        // scatter on a far shell behind the action
-        const u = srange(-1, 1), th = srange(0, Math.PI * 2), r = srange(60, 95);
-        const s = Math.sqrt(1 - u * u);
-        pos[i * 3]     = Math.cos(th) * s * r;
-        pos[i * 3 + 1] = u * r * 0.6 - 6;
-        pos[i * 3 + 2] = Math.sin(th) * s * r - 20;
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      const m = new THREE.PointsMaterial({ color: 0x8a7a64, size: 0.5, sizeAttenuation: true,
-        transparent: true, opacity: 0.7 });
-      scene.add(new THREE.Points(g, m));
-    })();
-
     // ---------------------------------------------------------------- lights
-    scene.add(new THREE.HemisphereLight(0x4a3826, 0x100c09, 0.5));
-    const sun = new THREE.DirectionalLight(C_BONE, 1.7);
+    // Gentle warm rig: soft hemisphere (warm sky / warm ground) + a single
+    // warm directional sun. No coloured neon point-lights, no glow.
+    scene.add(new THREE.HemisphereLight(0xf0e4cb, 0x4a3b2a, 0.85));
+    const sun = new THREE.DirectionalLight(C_BONE, 1.15);
     sun.position.set(-8, 12, 10);
     scene.add(sun);
-    const amberGlow = new THREE.PointLight(C_AMBER, 1.6, 40, 1.6);
-    amberGlow.position.set(0, 1, 0);
-    scene.add(amberGlow);
+    const fill = new THREE.DirectionalLight(0xe8d8b6, 0.28);
+    fill.position.set(6, 4, -8);
+    scene.add(fill);
 
     // ---------------------------------------------------------------- orbital plane
     // Everything that orbits lives inside this tilted group so the camera sees
@@ -186,12 +173,12 @@
     const planetTex = (() => {
       const c = document.createElement('canvas'); c.width = 256; c.height = 128;
       const ctx = c.getContext('2d');
-      ctx.fillStyle = '#3a2114'; ctx.fillRect(0, 0, 256, 128);
-      // banded amber/red continents for a lava-planet feel (deterministic blobs)
+      ctx.fillStyle = '#7a5232'; ctx.fillRect(0, 0, 256, 128);
+      // soft earthy continents — olive + ochre + clay, flat matte ink (no glow)
+      const blobs = ['rgba(111,106,59,0.55)', 'rgba(200,146,58,0.40)', 'rgba(74,59,42,0.45)'];
       for (let i = 0; i < 46; i++){
         const x = sint(256), y = sint(128), rr = srange(6, 22);
-        const hot = srnd() > 0.5;
-        ctx.fillStyle = hot ? 'rgba(216,65,43,0.55)' : 'rgba(232,162,58,0.40)';
+        ctx.fillStyle = blobs[sint(blobs.length)];
         ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
       }
       const t = new THREE.CanvasTexture(c);
@@ -201,23 +188,16 @@
     const planet = new THREE.Mesh(
       new THREE.SphereGeometry(PLANET_R, 40, 28),
       new THREE.MeshStandardMaterial({
-        map: planetTex, color: 0xcfae84,
-        emissive: new THREE.Color(C_RED).multiplyScalar(0.10), emissiveMap: planetTex,
-        roughness: 0.85, metalness: 0.1
+        map: planetTex, color: 0xb98a55,
+        roughness: 0.95, metalness: 0.0
       })
     );
     field.add(planet);
-    // faint atmosphere shell
-    const atmo = new THREE.Mesh(
-      new THREE.SphereGeometry(PLANET_R + 0.5, 32, 22),
-      new THREE.MeshBasicMaterial({ color: C_AMBER, transparent: true, opacity: 0.06, side: THREE.BackSide })
-    );
-    field.add(atmo);
 
     // ---------------------------------------------------------------- orbit ring guide
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(ORBIT_R, 0.045, 8, 96),
-      new THREE.MeshBasicMaterial({ color: C_MINT, transparent: true, opacity: 0.22 })
+      new THREE.MeshBasicMaterial({ color: C_OLIVE, transparent: true, opacity: 0.35 })
     );
     ring.rotation.x = Math.PI / 2;   // lay flat in the (already tilted) field
     field.add(ring);
@@ -235,25 +215,24 @@
     const shipBody = new THREE.Mesh(
       new THREE.ConeGeometry(0.5, 1.5, 4),
       new THREE.MeshStandardMaterial({
-        color: 0xffffff, emissive: new THREE.Color(C_MINT), emissiveIntensity: 1.05,
-        roughness: 0.25, metalness: 0.55, flatShading: true
+        // honest matte clay — lit by the warm rig, no emissive glow
+        color: C_SHIP, roughness: 0.7, metalness: 0.05, flatShading: true
       })
     );
     // cone default points +y; rotate so the nose leads the orbit (tangent, +z local)
     shipBody.rotation.x = Math.PI / 2;
     ship.add(shipBody);
-    // glowing halo around the ship
+    // cream nose band — a small matte ring marking the ship's heading (no glow)
     const shipHalo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.62, 0.06, 8, 18),
-      new THREE.MeshBasicMaterial({ color: C_MINT, transparent: true, opacity: 0.7 })
+      new THREE.TorusGeometry(0.5, 0.06, 8, 18),
+      new THREE.MeshStandardMaterial({ color: C_BONE, roughness: 0.8, metalness: 0.0 })
     );
+    shipHalo.position.set(0, 0, 0.2);
     ship.add(shipHalo);
-    const shipLight = new THREE.PointLight(C_MINT, 1.3, 9, 2);
-    ship.add(shipLight);
-    // little engine trail spark
+    // little matte engine trail spark (subtle gameplay feedback, not a glow)
     const trail = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18, 8, 8),
-      new THREE.MeshBasicMaterial({ color: C_AMBER, transparent: true, opacity: 0.8 })
+      new THREE.SphereGeometry(0.16, 8, 8),
+      new THREE.MeshStandardMaterial({ color: C_AMBER, roughness: 0.6, metalness: 0.0 })
     );
     trail.position.set(0, 0, -0.95);
     ship.add(trail);
@@ -266,8 +245,8 @@
     const asteroids = [];
     for (let i = 0; i < ASTEROID_POOL; i++){
       const mat = new THREE.MeshStandardMaterial({
-        color: C_RED, emissive: new THREE.Color(C_RED), emissiveIntensity: 0.45,
-        roughness: 0.7, metalness: 0.3, flatShading: true
+        // matte oxblood rock — lit by the rig, no emissive glow
+        color: C_RED, roughness: 0.85, metalness: 0.05, flatShading: true
       });
       const mesh = new THREE.Mesh(rockGeo, mat);
       mesh.visible = false;
@@ -551,9 +530,9 @@
       }
 
       // ship idle motion (always — looks alive on the attract screen too)
-      shipHalo.rotation.z += 0.06;
-      trail.material.opacity = 0.5 + 0.4 * Math.sin(t * 0.5);
-      shipLight.intensity = 1.2 + Math.sin(t * 0.2) * 0.25;
+      shipHalo.rotation.z += 0.04;
+      // gentle engine pulse — a small scale wobble on the trail spark (no glow)
+      trail.scale.setScalar(0.85 + 0.25 * (0.5 + 0.5 * Math.sin(t * 0.5)));
 
       // particles
       for (let i = sparks.length - 1; i >= 0; i--){

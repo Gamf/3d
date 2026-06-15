@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#e9dcc0">
   <title>Sky Glide — Gamf</title>
   <meta name="description" content="3D flappy flight. Tap to rise and glide through ring gates receding into the haze. Each gate cleared scores.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,8 +11,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    /* genre accent for this game (3D = mint) */
-    body { --gx-accent: #5ad1a8; }
+    /* GAMF Quarterly accent — oxblood */
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none;
       -webkit-user-select: none; user-select: none; }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
@@ -21,7 +21,7 @@
       text-align: center; z-index: 4; pointer-events: none;
       font-family: var(--gx-font-display); font-weight: 700;
       font-size: clamp(28px, 8vw, 56px); letter-spacing: 2px; text-transform: uppercase;
-      color: var(--gx-amber);
+      color: var(--gx-accent, #9b3a22);
       opacity: 0; transform: translateY(-6px);
       transition: opacity .25s ease, transform .25s ease; }
     .sg-flash.show { opacity: 1; transform: translateY(0); }
@@ -99,12 +99,15 @@
     const flashEl = document.getElementById('flash');
     bestEl.textContent = best;
 
-    // ---------------------------------------------------------------- palette
-    const BG       = 0x15110e;   // canvas bg (arcade warm near-black)
-    const RED      = 0xd8412b;   // accent red
-    const AMBER    = 0xe8a23a;   // accent amber
-    const BONE     = 0xf4ede1;   // bone text / glider body
-    const ACCENT   = 0x5ad1a8;   // genre mint, used sparingly on rings
+    // ---------------------------------------------------------------- warm palette (GAMF Quarterly)
+    // Solid warm cream daylight sky — no neon, no glow, no gradients.
+    const BG       = 0xe9dcc0;   // warm cream sky / background
+    const GROUND   = 0xb9a884;   // sun-bleached sand ground
+    const RED      = 0x9b3a22;   // oxblood accent (crash / wings)
+    const AMBER    = 0xc8923a;   // ochre accent (scored / nose)
+    const BONE     = 0xefe6d2;   // cream glider body
+    const OLIVE    = 0x6f6a3b;   // olive ring gates
+    const ACCENT   = OLIVE;      // ring gate colour (matte olive)
 
     // ---------------------------------------------------------------- world config
     const SPAWN_Z   = -150;      // where gates appear (far into the haze)
@@ -120,21 +123,28 @@
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.16;
+    renderer.toneMappingExposure = 1.12;
     document.body.appendChild(renderer.domElement);
 
     // ---------------------------------------------------------------- scene + fog
     const scene = new THREE.Scene();
+    // Solid warm cream sky — no gradient skydome, no dark void.
     scene.background = new THREE.Color(BG);
-    scene.fog = new THREE.Fog(BG, 36, 130);
+    // Subtle warm-cream fog matching the background. Far must reach past the
+    // spawn point (~160 units from the camera) or freshly spawned gates fade
+    // fully into the sky and never appear — the old far of 130 hid every gate.
+    scene.fog = new THREE.Fog(BG, 60, 240);
 
     const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 320);
     camera.position.set(0, 1.6, 9.5);
     camera.lookAt(0, 0.4, -28);
 
     // ---------------------------------------------------------------- lights
-    scene.add(new THREE.HemisphereLight(0xffe9c8, 0x1a120c, 0.62));
-    const key = new THREE.DirectionalLight(0xfff1d6, 1.05);
+    // Gentle, warm: soft hemisphere (warm sky / warm ground) + soft ambient +
+    // a single warm directional key. No colored neon point-lights.
+    scene.add(new THREE.HemisphereLight(BG, GROUND, 0.85));
+    scene.add(new THREE.AmbientLight(0xfff2dc, 0.28));
+    const key = new THREE.DirectionalLight(0xfff1d6, 1.0);
     key.position.set(6, 12, 7);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -142,28 +152,13 @@
     key.shadow.camera.left = -16; key.shadow.camera.right = 16;
     key.shadow.camera.top = 16; key.shadow.camera.bottom = -16;
     scene.add(key);
-    const warm = new THREE.PointLight(AMBER, 2.0, 30, 1.6);
-    warm.position.set(-4, 5, 4);
-    scene.add(warm);
 
-    // ---------------------------------------------------------------- floor (scrolling haze grid)
-    const gridTex = (() => {
-      const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#19120c'; ctx.fillRect(0, 0, 128, 128);
-      ctx.strokeStyle = 'rgba(232,162,58,0.42)'; ctx.lineWidth = 3;
-      ctx.strokeRect(1.5, 1.5, 125, 125);
-      const t = new THREE.CanvasTexture(c);
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(8, 64);
-      t.colorSpace = THREE.SRGBColorSpace;
-      return t;
-    })();
+    // ---------------------------------------------------------------- floor (plain solid warm ground)
+    // A plain solid sun-bleached ground plane — no grid lines, no glow.
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(120, 360),
       new THREE.MeshStandardMaterial({
-        map: gridTex, color: 0x140e0a, roughness: 0.85, metalness: 0.1,
-        emissive: new THREE.Color(AMBER).multiplyScalar(0.03), emissiveMap: gridTex
+        color: GROUND, roughness: 0.95, metalness: 0.0
       })
     );
     floor.rotation.x = -Math.PI / 2;
@@ -171,31 +166,20 @@
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // ---------------------------------------------------------------- distant cloud bands (parallax markers)
-    const cloudMat = new THREE.MeshBasicMaterial({ color: 0x241a12, transparent: true, opacity: 0.55, fog: true });
-    const clouds = [];
-    for (let i = 0; i < 18; i++){
-      const w = srange(8, 22), h = srange(2.4, 5);
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), cloudMat);
-      m.position.set(srange(-46, 46), srange(-Y_LIMIT, Y_LIMIT), srange(SPAWN_Z, -10));
-      scene.add(m);
-      clouds.push({ mesh: m, base: m.position.z });
-    }
-
     // ---------------------------------------------------------------- glider (the player)
+    // Honest matte materials — cream body, oxblood wings, ochre nose. No glow.
     const glider = new THREE.Group();
     // fuselage
     const body = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.34, 1.0, 6, 12),
-      new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.4, metalness: 0.35,
-        emissive: new THREE.Color(AMBER), emissiveIntensity: 0.12 })
+      new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.7, metalness: 0.0 })
     );
     body.rotation.x = Math.PI / 2;
     body.castShadow = true;
     glider.add(body);
     // wings
-    const wingMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.5, metalness: 0.25,
-      emissive: new THREE.Color(RED), emissiveIntensity: 0.25, side: THREE.DoubleSide });
+    const wingMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.75, metalness: 0.0,
+      side: THREE.DoubleSide });
     const wing = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.08, 0.9), wingMat);
     wing.position.set(0, 0, 0.1);
     wing.castShadow = true;
@@ -207,16 +191,13 @@
     // nose accent
     const nose = new THREE.Mesh(
       new THREE.ConeGeometry(0.34, 0.5, 12),
-      new THREE.MeshStandardMaterial({ color: AMBER, roughness: 0.3, metalness: 0.5,
-        emissive: new THREE.Color(AMBER), emissiveIntensity: 0.4 })
+      new THREE.MeshStandardMaterial({ color: AMBER, roughness: 0.65, metalness: 0.0 })
     );
     nose.rotation.x = -Math.PI / 2;
     nose.position.set(0, 0, -0.85);
     glider.add(nose);
     glider.position.set(0, 0, PLAYER_Z);
     scene.add(glider);
-    const gliderLight = new THREE.PointLight(AMBER, 1.2, 10, 2);
-    glider.add(gliderLight);
 
     // ---------------------------------------------------------------- trail (pooled puffs)
     const trailGeo = new THREE.SphereGeometry(0.16, 6, 6);
@@ -238,29 +219,23 @@
     }
 
     // ---------------------------------------------------------------- ring gates (pooled)
+    // Honest matte olive ring gates — no emissive glow, no halo plane.
     const ringGeo = new THREE.TorusGeometry(RING_R, 0.34, 10, 28);
     function makeRingMat(){
       return new THREE.MeshStandardMaterial({
-        color: ACCENT, emissive: new THREE.Color(ACCENT), emissiveIntensity: 0.85,
-        roughness: 0.3, metalness: 0.4
+        color: ACCENT, roughness: 0.7, metalness: 0.0
       });
     }
     const POOL = 12;
-    const gates = [];   // {mesh, halo, active, scored, x, y}
+    const gates = [];   // {group, ring, active, scored, x, y}
     for (let i = 0; i < POOL; i++){
       const g = new THREE.Group();
       const ring = new THREE.Mesh(ringGeo, makeRingMat());
       ring.castShadow = true;
       g.add(ring);
-      // inner glow plane so the target reads clearly from afar
-      const glow = new THREE.Mesh(
-        new THREE.RingGeometry(0, RING_R - 0.2, 24),
-        new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.07, side: THREE.DoubleSide })
-      );
-      g.add(glow);
       g.visible = false;
       scene.add(g);
-      gates.push({ group: g, ring, glow, active: false, scored: false, x: 0, y: 0 });
+      gates.push({ group: g, ring, active: false, scored: false, x: 0, y: 0 });
     }
 
     // ---------------------------------------------------------------- particles (death + score bursts)
@@ -300,7 +275,6 @@
       g.group.visible = true;
       g.ring.rotation.set(0, 0, srange(0, Math.PI));
       g.ring.material.color.setHex(ACCENT);
-      g.ring.material.emissive.setHex(ACCENT);
     }
 
     const over_el   = document.getElementById('over');
@@ -452,8 +426,6 @@
           if (!g.active) continue;
           g.group.position.z += speed;
           g.ring.rotation.z += 0.012;
-          // gentle pulse so rings shimmer
-          g.ring.material.emissiveIntensity = 0.7 + Math.sin(t * 0.12 + g.x) * 0.25;
 
           // scoring / collision as the gate plane passes the glider
           if (!g.scored && g.group.position.z >= PLAYER_Z - speed && g.group.position.z <= PLAYER_Z + speed){
@@ -467,12 +439,10 @@
               score = gatesPassed;
               setPill();
               g.ring.material.color.setHex(AMBER);
-              g.ring.material.emissive.setHex(AMBER);
               burst(g.x, g.y, PLAYER_Z, AMBER, 12);
             } else {
               // clipped the rim -> crash
               g.ring.material.color.setHex(RED);
-              g.ring.material.emissive.setHex(RED);
               end();
             }
           }
@@ -489,18 +459,6 @@
           farthestZ = SPAWN_Z;
         }
 
-        // scroll the floor grid + recycle clouds for motion
-        gridTex.offset.y -= speed * 0.02;
-        for (const c of clouds){
-          c.mesh.position.z += speed * 0.55;
-          if (c.mesh.position.z > 10){
-            c.mesh.position.z = SPAWN_Z + srange(-10, 10);
-            c.mesh.position.x = srange(-46, 46);
-            c.mesh.position.y = srange(-Y_LIMIT, Y_LIMIT);
-          }
-        }
-
-        gliderLight.intensity = 1.0 + Math.sin(t * 0.2) * 0.3;
       }
 
       // trail fade (always, so it settles on the modal)

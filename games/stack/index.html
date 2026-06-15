@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#07080c">
+  <meta name="theme-color" content="#e9dcc0">
   <title>Stack — Gamf</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    /* genre accent for this game (3D = mint) */
-    body{--gx-accent:#5ad1a8}
+    /* genre accent for this game (GAMF Quarterly — oxblood) */
+    body{--gx-accent:#9b3a22}
     html,body{height:100%;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
     canvas{display:block;width:100%;height:100%}
   </style>
@@ -69,14 +69,10 @@
     document.body.appendChild(renderer.domElement);
 
     const scene=new THREE.Scene();
-    // gradient skybox background
-    const bgTex=(()=>{ const c=document.createElement('canvas'); c.width=4; c.height=256;
-      const g=c.getContext('2d').createLinearGradient(0,0,0,256);
-      g.addColorStop(0,'#1a2336'); g.addColorStop(0.5,'#12141d'); g.addColorStop(1,'#0a0b10');
-      const ctx=c.getContext('2d'); ctx.fillStyle=g; ctx.fillRect(0,0,4,256);
-      const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; })();
-    scene.background=bgTex;
-    scene.fog=new THREE.Fog(0x0e0f13,28,70);
+    // solid warm cream background (GAMF Quarterly — print catalogue daylight)
+    scene.background=new THREE.Color(0xe9dcc0);
+    // subtle warm fog matching the background, so distant chips fade gently
+    scene.fog=new THREE.Fog(0xe9dcc0,42,82);
 
     const D=8; let camera;
     function makeCamera(){ const a=innerWidth/innerHeight;
@@ -85,14 +81,15 @@
     makeCamera();
 
     const lightRig=new THREE.Group(); scene.add(lightRig);
-    lightRig.add(new THREE.HemisphereLight(0xbfd4ff,0x202838,0.85));
-    const dir=new THREE.DirectionalLight(0xffffff,1.05); dir.position.set(8,16,6);
+    // gentle warm sky / warm ground hemisphere (no neon blue)
+    lightRig.add(new THREE.HemisphereLight(0xf0e4cb,0x6b5a3f,0.85));
+    const dir=new THREE.DirectionalLight(0xfff2da,1.0); dir.position.set(8,16,6);
     dir.castShadow=true; dir.shadow.mapSize.set(1024,1024);
     dir.shadow.camera.near=1; dir.shadow.camera.far=60;
     dir.shadow.camera.left=-16; dir.shadow.camera.right=16;
     dir.shadow.camera.top=16; dir.shadow.camera.bottom=-16;
     lightRig.add(dir);
-    const fill=new THREE.DirectionalLight(0x6c8cff,0.25); fill.position.set(-6,4,-8); lightRig.add(fill);
+    const fill=new THREE.DirectionalLight(0xe8d8b6,0.22); fill.position.set(-6,4,-8); lightRig.add(fill);
 
     const H=1;                                   // block height
     const blocks=new THREE.Group(); scene.add(blocks);
@@ -100,10 +97,11 @@
     let paused=false;
     let chips=[];                                // falling sliced-off pieces
 
-    function colorFor(i){ const h=(i*9+185)%360; const c=new THREE.Color(`hsl(${h},60%,58%)`); return c; }
+    // warm earthy catalogue palette — matte, no neon
+    const PALETTE=[0x9b3a22,0xc8923a,0x6f6a3b,0xa4623a,0xefe6d2,0x4a3b2a];
+    function colorFor(i){ return new THREE.Color(PALETTE[((i%PALETTE.length)+PALETTE.length)%PALETTE.length]); }
     function makeMat(i){ const c=colorFor(i);
-      return new THREE.MeshStandardMaterial({color:c,roughness:0.45,metalness:0.18,
-        emissive:c.clone().multiplyScalar(0.18)}); }
+      return new THREE.MeshStandardMaterial({color:c,roughness:0.85,metalness:0.0}); }
     function addLayer(x,z,w,d,i){ const g=new THREE.BoxGeometry(w,H,d);
       const m=new THREE.Mesh(g,makeMat(i)); m.castShadow=true; m.receiveShadow=true;
       m.position.set(x,i*H,z); blocks.add(m); return {mesh:m,x,z,w,d}; }

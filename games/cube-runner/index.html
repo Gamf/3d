@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#07080c">
+  <meta name="theme-color" content="#e9dcc0">
   <title>Cube Runner — Gamf</title>
-  <meta name="description" content="Endless 3D neon runner. Dodge obstacles, switch lanes, chase the high score.">
+  <meta name="description" content="Endless 3D runner. Dodge obstacles, switch lanes, chase the high score.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    /* genre accent for this game (3D = mint) */
-    body { --gx-accent: #5ad1a8; }
+    /* GAMF Quarterly accent — oxblood */
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none;
       -webkit-user-select: none; user-select: none; }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
@@ -20,7 +20,7 @@
     .cr-flash { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 64px);
       text-align: center; z-index: 4; pointer-events: none;
       font-family: var(--gx-font-display); font-weight: 700; font-size: var(--fs-xl);
-      color: var(--gx-accent); text-shadow: 0 0 18px color-mix(in srgb, var(--gx-accent) 70%, transparent);
+      color: var(--gx-accent);
       opacity: 0; transform: translateY(-6px); transition: opacity .25s var(--ease), transform .25s var(--ease); }
     .cr-flash.show { opacity: 1; transform: translateY(0); }
   </style>
@@ -63,7 +63,7 @@
   <div class="gx-modal" id="gxHelp">
     <div class="gx-modal__card">
       <div class="gx-modal__title">How to play</div>
-      <p class="gx-help__obj">Race your neon cube down an endless track, dodging obstacle blocks and grabbing glowing orbs to push your score as high as you can.</p>
+      <p class="gx-help__obj">Race your cube down an endless track, dodging obstacle blocks and grabbing bonus orbs to push your score as high as you can.</p>
       <ul class="gx-help__list">
         <li><b>Swipe / ← →</b><span>Switch lane</span></li>
         <li><b>A / D</b><span>Switch lane</span></li>
@@ -104,7 +104,14 @@
     const SPAWN_Z = -160;             // where obstacles appear (far)
     const DESPAWN_Z = 14;             // where they get recycled (behind camera)
     const PLAYER_Z = 0;               // player's fixed z
-    const ACCENT = 0x5ad1a8;
+
+    // ---------------------------------------------------------------- warm palette (GAMF Quarterly)
+    const C_SKY     = 0xe9dcc0;  // warm cream sky / background
+    const C_GROUND  = 0xb9a884;  // sun-bleached sand ground
+    const C_RAIL    = 0x6f6a3b;  // olive side rails
+    const C_PLAYER  = 0x9b3a22;  // oxblood player cube
+    const C_ORB     = 0xc8923a;  // ochre bonus orb
+    const ACCENT    = C_PLAYER;
 
     // ---------------------------------------------------------------- renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -117,20 +124,23 @@
 
     // ---------------------------------------------------------------- scene + fog
     const scene = new THREE.Scene();
-    const FOG = 0x05060b;
-    scene.background = new THREE.Color(FOG);
-    // Fog far must reach past the spawn point (~168 units from the camera) or
-    // every freshly spawned obstacle is fully fogged to the background and
-    // never appears. Keep a soft atmospheric depth, but let gameplay be seen.
-    scene.fog = new THREE.Fog(FOG, 40, 230);
+    // Solid warm cream sky — no gradient skydome, no near-black void.
+    scene.background = new THREE.Color(C_SKY);
+    // Subtle warm-cream fog matching the background for soft depth. Far must
+    // reach past the spawn point (~168 units from the camera) or freshly
+    // spawned obstacles fade fully into the sky and never appear.
+    scene.fog = new THREE.Fog(C_SKY, 70, 250);
 
     const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 400);
     camera.position.set(0, 4.4, 8);
     camera.lookAt(0, 1.0, -18);
 
     // ---------------------------------------------------------------- lights
-    scene.add(new THREE.HemisphereLight(0x88aaff, 0x0a0c16, 0.65));
-    const key = new THREE.DirectionalLight(0xffffff, 1.05);
+    // Gentle, warm, no colored neon point-lights: soft hemisphere (warm sky /
+    // warm ground) + a single warm directional key.
+    scene.add(new THREE.HemisphereLight(C_SKY, C_GROUND, 0.85));
+    scene.add(new THREE.AmbientLight(0xfff2dc, 0.25));
+    const key = new THREE.DirectionalLight(0xfff1d6, 1.0);
     key.position.set(5, 14, 6);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -138,17 +148,13 @@
     key.shadow.camera.left = -10; key.shadow.camera.right = 10;
     key.shadow.camera.top = 14; key.shadow.camera.bottom = -30;
     scene.add(key);
-    const accentLight = new THREE.PointLight(ACCENT, 2.2, 26, 1.6);
-    accentLight.position.set(0, 2.2, 2);
-    scene.add(accentLight);
 
-    // ---------------------------------------------------------------- floor (plain solid ground)
-    // No grid lines — a subtle dark solid plane keeps the focus on the cubes
-    // and avoids the "grid everywhere" look.
+    // ---------------------------------------------------------------- floor (plain solid warm ground)
+    // A plain solid warm ground plane — no grid lines.
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(TRACK_HALF * 2, 360),
       new THREE.MeshStandardMaterial({
-        color: 0x0c1018, roughness: 0.85, metalness: 0.2
+        color: C_GROUND, roughness: 0.95, metalness: 0.0
       })
     );
     floor.rotation.x = -Math.PI / 2;
@@ -156,46 +162,38 @@
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // glowing tunnel side rails
+    // matte olive side rails (no glow)
     const railGeo = new THREE.BoxGeometry(0.18, 0.5, 360);
     const railMat = new THREE.MeshStandardMaterial({
-      color: 0x0c1420, emissive: new THREE.Color(ACCENT), emissiveIntensity: 1.4,
-      roughness: 0.3, metalness: 0.6
+      color: C_RAIL, roughness: 0.85, metalness: 0.0
     });
     for (const sx of [-TRACK_HALF, TRACK_HALF]) {
       const rail = new THREE.Mesh(railGeo, railMat);
       rail.position.set(sx, 0.25, SPAWN_Z / 2 + 10);
+      rail.receiveShadow = true;
       scene.add(rail);
     }
 
     // ---------------------------------------------------------------- player cube
+    // Honest matte oxblood cube — no emissive glow, no bloom halo.
     const player = new THREE.Mesh(
       new THREE.BoxGeometry(1.1, 1.1, 1.1),
       new THREE.MeshStandardMaterial({
-        color: 0xffffff, emissive: new THREE.Color(ACCENT), emissiveIntensity: 0.9,
-        roughness: 0.2, metalness: 0.5
+        color: C_PLAYER, roughness: 0.7, metalness: 0.0
       })
     );
     player.castShadow = true;
     player.position.set(0, 0.7, PLAYER_Z);
     scene.add(player);
-    // soft translucent shell for a "bloom" feel (no wireframe grid lines)
-    const halo = new THREE.Mesh(
-      new THREE.BoxGeometry(1.32, 1.32, 1.32),
-      new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.16,
-        side: THREE.BackSide, depthWrite: false })
-    );
-    player.add(halo);
-    const playerLight = new THREE.PointLight(ACCENT, 1.6, 9, 2);
-    player.add(playerLight);
 
     // ---------------------------------------------------------------- obstacles (pooled)
-    const OBST_COLORS = [0xff5d6c, 0xffb454, 0x7c5cff, 0x4ea8ff];
+    // Warm earthy obstacle palette — brick, ochre, olive, clay. Honest matte
+    // colours, no emissive glow.
+    const OBST_COLORS = [0x9b3a22, 0xc8923a, 0x6f6a3b, 0xa4623a];
     const obstGeo = new THREE.BoxGeometry(1.7, 1.7, 1.7);
     function makeObstMat(hex){
       return new THREE.MeshStandardMaterial({
-        color: hex, emissive: new THREE.Color(hex), emissiveIntensity: 0.55,
-        roughness: 0.3, metalness: 0.4
+        color: hex, roughness: 0.75, metalness: 0.0
       });
     }
     // One shared material per palette colour — reused across spawns so we never
@@ -210,10 +208,10 @@
       obstacles.push({ mesh: m, active: false, lane: 1 });
     }
 
-    // collectible orbs (bonus points)
+    // collectible orbs (bonus points) — matte ochre, no glow
     const orbGeo = new THREE.IcosahedronGeometry(0.42, 0);
     const orbMat = new THREE.MeshStandardMaterial({
-      color: 0xfff0a0, emissive: 0xffd36c, emissiveIntensity: 1.2, roughness: 0.2, metalness: 0.3
+      color: C_ORB, roughness: 0.6, metalness: 0.0
     });
     const orbs = [];
     for (let i = 0; i < 24; i++) {
@@ -283,7 +281,7 @@
       overTitle.textContent = 'Game over';
       againLabel.textContent = 'Play again';
       over_el.classList.add('gx-show');
-      burst(player.position.x, player.position.y, player.position.z, 0xff5d6c, 30);
+      burst(player.position.x, player.position.y, player.position.z, 0x9b3a22, 30);
     }
 
     function togglePause(){
@@ -430,7 +428,6 @@
         player.rotation.z = tilt;
         player.rotation.x = Math.sin(t * 0.18) * 0.05;
         player.position.y = 0.7 + Math.abs(Math.sin(t * 0.16)) * 0.06;
-        halo.rotation.y += 0.04; halo.rotation.x += 0.02;
 
         // move obstacles toward the camera
         for (const o of obstacles){
@@ -453,12 +450,10 @@
           if (hits(player.position.x, PLAYER_Z, o.mesh.position.x, o.mesh.position.z, 1.0, 1.0)){
             o.active = false; o.mesh.visible = false;
             dist += 25; // bonus distance => bonus score
-            burst(o.mesh.position.x, o.mesh.position.y, o.mesh.position.z, 0xffd36c, 14);
+            burst(o.mesh.position.x, o.mesh.position.y, o.mesh.position.z, 0xc8923a, 14);
           }
           if (o.mesh.position.z > DESPAWN_Z){ o.active = false; o.mesh.visible = false; }
         }
-
-        accentLight.intensity = 2.0 + Math.sin(t * 0.2) * 0.4;
       }
 
       // particles always update (so the death burst animates on the modal)

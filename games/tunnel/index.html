@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#3a2c20">
   <title>Tunnel — Gamf</title>
-  <meta name="description" content="Fly down an endless neon tunnel. Rotate around the wall to slip through the gaps in oncoming rings. Speed never stops climbing.">
+  <meta name="description" content="Fly down an endless tunnel. Rotate around the wall to slip through the gaps in oncoming rings. Speed never stops climbing.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    /* genre accent for this game (3D = mint) */
-    body { --gx-accent: #5ad1a8; }
+    /* genre accent for this game (GAMF Quarterly — oxblood) */
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none;
       -webkit-user-select: none; user-select: none; }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
@@ -22,7 +22,6 @@
       font-family: var(--gx-font-display); font-weight: 400; font-size: clamp(26px, 7vw, 44px);
       letter-spacing: 1px; text-transform: uppercase;
       color: var(--gx-amber);
-      text-shadow: 0 0 22px color-mix(in srgb, var(--gx-amber) 70%, transparent);
       opacity: 0; transform: translateY(-6px); transition: opacity .25s ease, transform .25s ease; }
     .tn-flash.show { opacity: 1; transform: translateY(0); }
     /* "tap to start" attract prompt */
@@ -116,12 +115,17 @@
     const startPrompt = document.getElementById('startPrompt');
     bestEl.textContent = best;
 
-    // ---------------------------------------------------------------- palette
-    const C_BG    = 0x15110e;   // canvas background (arcade warm near-black)
-    const C_RED   = 0xd8412b;   // accent red
-    const C_AMBER = 0xe8a23a;   // accent amber
-    const C_MINT  = 0x5ad1a8;   // 3D genre accent (player / safe gaps)
-    const C_BONE  = 0xf4ede1;   // bone text
+    // ---------------------------------------------------------------- warm palette (GAMF Quarterly)
+    // Warm 1970s print catalogue: cream stock, oxblood ink, earthy tones.
+    // No neon, no glow, no gradients. The tube interior runs a touch dark, so
+    // the scene background is a warm dusk brown rather than a near-black void.
+    const C_BG     = 0x3a2c20;  // warm dusk brown — scene background
+    const C_TUBE   = 0x4a3b2a;  // warm brown tunnel wall
+    const C_OXBLOOD= 0x9b3a22;  // oxblood / brick — ring panels & ship
+    const C_OCHRE  = 0xc8923a;  // ochre — alternate ring panels & accents
+    const C_OLIVE  = 0x6f6a3b;  // olive
+    const C_CLAY   = 0xa4623a;  // clay
+    const C_CREAM  = 0xefe6d2;  // cream
 
     // ---------------------------------------------------------------- tunnel config
     const TUBE_R   = 6.0;       // radius of the tunnel wall
@@ -136,15 +140,16 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.16;
+    renderer.toneMappingExposure = 1.1;
     document.body.appendChild(renderer.domElement);
 
     // ---------------------------------------------------------------- scene + fog
     const scene = new THREE.Scene();
+    // Solid warm dusk-brown background — no gradient skydome, no near-black void.
     scene.background = new THREE.Color(C_BG);
-    // Fog must reach beyond where rings spawn (SPAWN_Z, ~219 units ahead of the
-    // camera) or freshly placed rings fade fully to the background and never
-    // appear. Keep a near haze for depth but push 'far' past the spawn distance.
+    // Subtle warm fog matching the background for soft depth. 'far' must reach
+    // beyond where rings spawn (SPAWN_Z, ~219 units ahead of the camera) or
+    // freshly placed rings fade fully into the background and never appear.
     scene.fog = new THREE.Fog(C_BG, 60, 300);
 
     const camera = new THREE.PerspectiveCamera(74, 1, 0.1, 500);
@@ -152,24 +157,36 @@
     camera.lookAt(0, 0, -40);
 
     // ---------------------------------------------------------------- lights
-    scene.add(new THREE.HemisphereLight(0x4a3826, 0x100c09, 0.55));
-    const headlamp = new THREE.PointLight(C_BONE, 2.0, 60, 1.4);
+    // Gentle, warm, no colored neon point-lights: soft hemisphere (warm sky /
+    // warm ground) + a single warm directional key that reaches every ring,
+    // including the far ones near the spawn point (directional = infinite range).
+    scene.add(new THREE.HemisphereLight(0xe9dcc0, 0x2a2018, 0.7));
+    scene.add(new THREE.AmbientLight(0xfff2dc, 0.35));
+    const key = new THREE.DirectionalLight(0xfff1d6, 1.15);
+    key.position.set(4, 8, 6);
+    scene.add(key);
+    // a second, dimmer warm fill aimed down the tunnel so distant rings read.
+    const fill = new THREE.DirectionalLight(0xf3e2bf, 0.55);
+    fill.position.set(-3, -2, 4);
+    scene.add(fill);
+    // a soft warm headlamp riding with the camera keeps the near tube readable.
+    const headlamp = new THREE.PointLight(C_CREAM, 1.2, 70, 1.4);
     headlamp.position.set(0, 0, 6);
     scene.add(headlamp);
-    const mintGlow = new THREE.PointLight(C_MINT, 2.4, 30, 1.8);
-    scene.add(mintGlow);
 
-    // ---------------------------------------------------------------- tunnel wall (neon ribs)
-    // A long cylinder shell, open-ended, drawn from inside (BackSide).
+    // ---------------------------------------------------------------- tunnel wall
+    // A long cylinder shell, open-ended, drawn from inside (BackSide). A printed
+    // catalogue look: warm matte brown stock with faint darker ribs — no neon,
+    // no emissive glow.
     const tubeTex = (() => {
       const c = document.createElement('canvas'); c.width = 64; c.height = 256;
       const ctx = c.getContext('2d');
-      ctx.fillStyle = '#1b1410'; ctx.fillRect(0, 0, 64, 256);
-      // bright ribs running around the tube (horizontal bands)
-      ctx.fillStyle = 'rgba(232,162,58,0.20)';
+      ctx.fillStyle = '#4a3b2a'; ctx.fillRect(0, 0, 64, 256);
+      // faint darker ribs running around the tube (horizontal bands)
+      ctx.fillStyle = 'rgba(40,30,20,0.35)';
       for (let y = 0; y < 256; y += 32){ ctx.fillRect(0, y, 64, 3); }
-      // faint longitudinal seam
-      ctx.fillStyle = 'rgba(216,65,43,0.16)';
+      // a slightly lighter longitudinal seam
+      ctx.fillStyle = 'rgba(200,146,58,0.18)';
       ctx.fillRect(0, 0, 2, 256);
       const t = new THREE.CanvasTexture(c);
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -180,22 +197,13 @@
     const tube = new THREE.Mesh(
       new THREE.CylinderGeometry(TUBE_R, TUBE_R, 440, SEGMENTS, 1, true),
       new THREE.MeshStandardMaterial({
-        map: tubeTex, color: 0x2a1f17, side: THREE.BackSide,
-        roughness: 0.62, metalness: 0.45,
-        emissive: new THREE.Color(C_AMBER).multiplyScalar(0.04), emissiveMap: tubeTex
+        map: tubeTex, color: C_TUBE, side: THREE.BackSide,
+        roughness: 0.92, metalness: 0.0
       })
     );
     tube.rotation.x = Math.PI / 2;       // lay the cylinder down the -z axis
     tube.position.z = -180;
     scene.add(tube);
-
-    // a second, fainter wireframe shell adds neon depth lines
-    const wire = new THREE.Mesh(
-      new THREE.CylinderGeometry(TUBE_R + 0.02, TUBE_R + 0.02, 440, SEGMENTS, 40, true),
-      new THREE.MeshBasicMaterial({ color: C_RED, wireframe: true, transparent: true, opacity: 0.12 })
-    );
-    wire.rotation.x = Math.PI / 2; wire.position.z = -180;
-    scene.add(wire);
 
     // ---------------------------------------------------------------- ship
     // A small craft riding the inside of the wall. Lives on a pivot so we can
@@ -211,20 +219,17 @@
     const shipBody = new THREE.Mesh(
       new THREE.ConeGeometry(0.6, 1.7, 4),
       new THREE.MeshStandardMaterial({
-        color: 0xffffff, emissive: new THREE.Color(C_MINT), emissiveIntensity: 1.0,
-        roughness: 0.25, metalness: 0.55, flatShading: true
+        color: C_OXBLOOD, roughness: 0.55, metalness: 0.1, flatShading: true
       })
     );
     shipBody.rotation.x = -Math.PI / 2;   // point the nose down -z (into the tunnel)
     ship.add(shipBody);
-    // glowing halo ring around the ship
+    // a matte ochre collar ring around the ship (gameplay marker, not a glow)
     const shipHalo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.7, 0.07, 8, 16),
-      new THREE.MeshBasicMaterial({ color: C_MINT, transparent: true, opacity: 0.7 })
+      new THREE.TorusGeometry(0.7, 0.08, 8, 20),
+      new THREE.MeshStandardMaterial({ color: C_OCHRE, roughness: 0.6, metalness: 0.1 })
     );
     ship.add(shipHalo);
-    const shipLight = new THREE.PointLight(C_MINT, 1.4, 10, 2);
-    ship.add(shipLight);
     // orient the ship so "down toward the wall" = away from centre
     ship.rotation.z = Math.PI; // cone base points outward to the wall
 
@@ -235,12 +240,12 @@
     const PANEL_W = (2 * Math.PI * TUBE_R) / SEGMENTS * 0.92;
     const panelGeo = new THREE.BoxGeometry(PANEL_W, 0.9, 0.7);
     function makePanelMat(hex){
+      // honest matte panels — lit by the scene, no emissive glow.
       return new THREE.MeshStandardMaterial({
-        color: hex, emissive: new THREE.Color(hex), emissiveIntensity: 0.6,
-        roughness: 0.3, metalness: 0.5
+        color: hex, roughness: 0.7, metalness: 0.05
       });
     }
-    const RING_COLORS = [C_RED, C_AMBER];
+    const RING_COLORS = [C_OXBLOOD, C_OCHRE, C_OLIVE, C_CLAY];
 
     const RING_POOL = 18;
     const rings = [];
@@ -248,7 +253,7 @@
       const group = new THREE.Group();
       group.visible = false;
       const panels = [];
-      const mat = makePanelMat(C_RED);
+      const mat = makePanelMat(C_OXBLOOD);
       for (let s = 0; s < SEGMENTS; s++){
         const p = new THREE.Mesh(panelGeo, mat);
         const ang = (s / SEGMENTS) * Math.PI * 2;
@@ -263,10 +268,12 @@
     }
 
     // ---------------------------------------------------------------- particles
+    // subtle gameplay feedback only (pass / crash debris) — lit matte chips,
+    // not glowing neon. No ambient particle field.
     const sparkGeo = new THREE.SphereGeometry(0.11, 6, 6);
     const sparks = [];
     function burst(x, y, z, hex, n = 18){
-      const m = new THREE.MeshBasicMaterial({ color: hex });
+      const m = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.7, metalness: 0.05 });
       for (let i = 0; i < n; i++){
         const s = new THREE.Mesh(sparkGeo, m); s.position.set(x, y, z);
         scene.add(s);
@@ -331,7 +338,6 @@
       r.gapWidth = gapWidth;
       const hex = RING_COLORS[sint(RING_COLORS.length)];
       r.mat.color.set(hex);
-      r.mat.emissive.set(hex);
       // open the gap: hide the panels in the gap window
       for (let s = 0; s < SEGMENTS; s++){
         let open = false;
@@ -362,7 +368,7 @@
       overTitle.textContent = 'Game over';
       againLabel.textContent = 'Play again';
       overEl.classList.add('gx-show');
-      burst(hx, hy, ship.getWorldPosition(new THREE.Vector3()).z, C_RED, 32);
+      burst(hx, hy, ship.getWorldPosition(new THREE.Vector3()).z, C_OXBLOOD, 32);
     }
 
     function togglePause(){
@@ -454,7 +460,7 @@
       requestAnimationFrame(animate);
       t += 1;
 
-      // continuous neon scroll of the tunnel texture for a sense of motion
+      // gentle scroll of the tunnel texture for a sense of forward motion
       tubeTex.offset.y += speed * 0.0016 * (running ? 1 : 0.25);
 
       if (running){
@@ -500,7 +506,7 @@
               // slipped through the gap -> award + a little spark
               score += 5; dist += 16; setPill();
               const sp = ship.getWorldPosition(new THREE.Vector3());
-              burst(sp.x, sp.y, sp.z, C_MINT, 10);
+              burst(sp.x, sp.y, sp.z, C_OCHRE, 10);
             }
           }
         }
@@ -524,10 +530,10 @@
         shipPivot.rotation.z = angle - Math.PI / 2;
       }
 
-      // mint glow rides with the ship
+      // warm headlamp rides just ahead of the ship so the near tube reads;
+      // gentle, steady — no neon pulsing.
       const sw = ship.getWorldPosition(new THREE.Vector3());
-      mintGlow.position.copy(sw); mintGlow.position.z += 2;
-      headlamp.intensity = 1.8 + Math.sin(t * 0.18) * 0.25;
+      headlamp.position.set(sw.x * 0.4, sw.y * 0.4, 6);
 
       // camera follows the ship's orbit so it stays framed near the bottom-ish
       const camA = angle;

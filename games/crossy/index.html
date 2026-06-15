@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#efe6d2">
   <title>Crossy — Gamf</title>
   <meta name="description" content="Hop forward across busy roads and rushing rivers. One more lane, one more point — how far can you get?">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,18 +11,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    /* genre accent for this game (3D = mint) */
-    body { --gx-accent: #5ad1a8; }
+    /* genre accent for this game (GAMF Quarterly — oxblood) */
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none;
       -webkit-user-select: none; user-select: none; }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     /* "GET READY" tap-to-start flash (cosmetic, no interaction) */
     .cy-flash { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 70px);
       text-align: center; z-index: 4; pointer-events: none;
-      font-family: var(--gx-font-display); font-weight: 400; font-size: clamp(24px, 6vw, 40px);
-      letter-spacing: 1.5px; text-transform: uppercase; color: var(--gx-amber);
+      font-family: var(--display, Georgia, serif); font-weight: 600; font-size: clamp(24px, 6vw, 40px);
+      letter-spacing: 1px; text-transform: uppercase; color: var(--accent, #9b3a22);
       opacity: 0; transform: translateY(-6px); transition: opacity .25s ease, transform .25s ease; }
-    .cy-flash.show { opacity: 1; transform: translateY(0); animation: gx-blink 1.2s steps(1) infinite; }
+    .cy-flash.show { opacity: 1; transform: translateY(0); animation: cy-blink 1.2s steps(1) infinite; }
+    @keyframes cy-blink { 50% { opacity: .35; } }
   </style>
 </head>
 <body class="gx">
@@ -98,17 +99,20 @@
     bestEl.textContent = best;
 
     // ---------------------------------------------------------------- palette
+    // GAMF Quarterly — warm 1970s print catalogue: cream stock, oxblood accent,
+    // ochre / olive / clay / warm browns. No neon, no glow, no gradients.
     const COL = {
-      bg:    0x15110e,
-      grass: 0x4f7a3a,  grass2: 0x436b32,
-      road:  0x2a2622,  road2:  0x322d28,
-      water: 0x2c5f7a,  water2: 0x346a86,
-      log:   0x7a4a28,
-      bone:  0xf4ede1,
-      red:   0xd8412b,  amber:  0xe8a23a, mint: 0x5ad1a8,
-      rail:  0x36281d
+      bg:    0xe9dcc0,            // warm cream daylight sky / background
+      grass: 0x6f6a3b,  grass2: 0x615d33,   // olive field
+      road:  0x4a3b2a,  road2:  0x423427,   // warm asphalt brown
+      water: 0x8a6f3f,  water2: 0x7d6438,   // muddy ochre river (warm, not blue)
+      log:   0x6e4a2c,
+      bone:  0xefe6d2,           // cream player body
+      red:   0x9b3a22,  amber:  0xc8923a, clay: 0xa4623a,   // oxblood / ochre / clay
+      rail:  0x4a3b2a
     };
-    const CAR_COLORS = [0xd8412b, 0xe8a23a, 0xc9c2b4, 0x6f9bd1, 0x9a6fd1, 0x5ad1a8];
+    // car bodies pull only from the warm earthy palette
+    const CAR_COLORS = [0x9b3a22, 0xc8923a, 0xa4623a, 0x6f6a3b, 0x4a3b2a, 0xefe6d2];
 
     // ---------------------------------------------------------------- grid config
     const TILE = 1;          // world units per cell
@@ -129,7 +133,8 @@
     // ---------------------------------------------------------------- scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(COL.bg);
-    scene.fog = new THREE.Fog(COL.bg, 22, 40);
+    // subtle, warm fog matching the cream sky so far rows fade gently (not a wall)
+    scene.fog = new THREE.Fog(COL.bg, 30, 52);
 
     // Isometric-ish orthographic camera (classic crossy look).
     const VIEW = 9.5;
@@ -138,8 +143,9 @@
     camera.position.copy(CAM_OFF);
 
     // ---------------------------------------------------------------- lights
-    scene.add(new THREE.HemisphereLight(0xfff4e0, 0x2a2018, 0.85));
-    const sun = new THREE.DirectionalLight(0xfff1d8, 1.25);
+    // single warm directional sun + soft hemisphere (warm sky / warm ground). No neon point-lights.
+    scene.add(new THREE.HemisphereLight(0xfaeccb, 0x8a795a, 0.75));
+    const sun = new THREE.DirectionalLight(0xfff1d8, 1.15);
     sun.position.set(-8, 18, 6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -202,9 +208,10 @@
       base.scale.set(0.92, 0.42, 0.62); base.position.y = 0.27; base.castShadow = true;
       const cab = new THREE.Mesh(boxGeo, mat(hex, { rough: 0.5, metal: 0.1 }));
       cab.scale.set(0.5, 0.34, 0.58); cab.position.set(-0.08, 0.6, 0); cab.castShadow = true;
-      const glass = new THREE.Mesh(boxGeo, mat(0x10131a, { rough: 0.3, metal: 0.4 }));
+      const glass = new THREE.Mesh(boxGeo, mat(0x3a3026, { rough: 0.5, metal: 0.1 }));
       glass.scale.set(0.51, 0.22, 0.5); glass.position.set(-0.08, 0.62, 0);
-      const lightF = new THREE.Mesh(boxGeo, mat(COL.amber, { emissive: COL.amber, ei: 0.8 }));
+      // honest matte amber headlight blocks — no emissive glow
+      const lightF = new THREE.Mesh(boxGeo, mat(COL.amber, { rough: 0.55 }));
       lightF.scale.set(0.06, 0.12, 0.12); lightF.position.set(0.46, 0.27, 0.18);
       const lightF2 = lightF.clone(); lightF2.position.z = -0.18;
       g.add(base, cab, glass, lightF, lightF2);
@@ -214,7 +221,7 @@
       const g = new THREE.Group();
       const body = new THREE.Mesh(boxGeo, mat(COL.log, { rough: 0.9 }));
       body.scale.set(len * 0.96, 0.36, 0.74); body.position.y = 0.16; body.castShadow = true;
-      const top = new THREE.Mesh(boxGeo, mat(0x8a5a34, { rough: 0.9 }));
+      const top = new THREE.Mesh(boxGeo, mat(0x86592f, { rough: 0.9 }));
       top.scale.set(len * 0.96, 0.1, 0.74); top.position.y = 0.36;
       g.add(body, top);
       return g;
@@ -223,7 +230,7 @@
       const g = new THREE.Group();
       const trunk = new THREE.Mesh(boxGeo, mat(0x6e4423, { rough: 0.95 }));
       trunk.scale.set(0.3, 0.5, 0.3); trunk.position.y = 0.25; trunk.castShadow = true;
-      const top = new THREE.Mesh(boxGeo, mat(0x3c6630, { rough: 0.9 }));
+      const top = new THREE.Mesh(boxGeo, mat(0x6f6a3b, { rough: 0.9 }));
       const h = srange(0.7, 1.2);
       top.scale.set(0.7, h, 0.7); top.position.y = 0.5 + h / 2; top.castShadow = true;
       g.add(trunk, top);
@@ -232,7 +239,7 @@
     function makeLilypad(){
       const m = new THREE.Mesh(
         new THREE.CylinderGeometry(0.42, 0.42, 0.08, 12),
-        mat(0x3f7a45, { rough: 0.9 })
+        mat(0x5f6b34, { rough: 0.9 })
       );
       m.position.y = 0.08;
       return m;

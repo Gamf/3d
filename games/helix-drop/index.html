@@ -3,20 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#07080c">
+  <meta name="theme-color" content="#3a2c20">
   <title>Helix Drop — Gamf</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    /* genre accent for this game (3D = mint) */
-    body{--gx-accent:#5ad1a8}
     html,body{height:100%;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
     /* combo flash — game-specific, kept as a custom element */
     .combo{position:fixed;top:calc(env(safe-area-inset-top) + 52px);left:0;right:0;text-align:center;z-index:4;
-      pointer-events:none;color:var(--gx-warn);font-family:var(--gx-font-display);font-weight:700;font-size:1.05rem;
-      opacity:0;transition:opacity .2s;text-shadow:0 0 16px rgba(255,180,84,.5)}
+      pointer-events:none;color:var(--accent);font-family:var(--display);font-weight:900;font-size:1.05rem;
+      opacity:0;transition:opacity .2s}
     .combo.show{opacity:1}
     canvas{display:block;width:100%;height:100%;touch-action:none}
   </style>
@@ -92,35 +90,33 @@
     document.body.appendChild(renderer.domElement);
 
     const scene=new THREE.Scene();
-    const bgTex=(()=>{ const c=document.createElement('canvas'); c.width=4; c.height=256;
-      const ctx=c.getContext('2d'); const g=ctx.createLinearGradient(0,0,0,256);
-      g.addColorStop(0,'#1b2740'); g.addColorStop(0.5,'#12141d'); g.addColorStop(1,'#08090d');
-      ctx.fillStyle=g; ctx.fillRect(0,0,4,256);
-      const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; })();
-    scene.background=bgTex;
+    // Solid warm cream "daylight" background — no gradient skydome.
+    scene.background=new THREE.Color(0xe9dcc0);
     // Fog adds depth to the far tower, but must NOT wash out the rings the player
-    // needs to read to plan rotations. The active play column sits ~12-27 units from
-    // the camera, so start the fog well beyond that and end it far out.
-    scene.fog=new THREE.Fog(0x0e0f13,30,80);
+    // needs to read to plan rotations. Subtle, warm, and matched to the background
+    // so the far end of the tower fades gently into the cream sky.
+    // The active play column sits ~12-27 units from the camera, so start the fog
+    // well beyond that and end it far out.
+    scene.fog=new THREE.Fog(0xe9dcc0,34,82);
 
     const camera=new THREE.PerspectiveCamera(55,1,0.1,200);
     camera.position.set(0,4,11);
 
-    scene.add(new THREE.HemisphereLight(0xcfe0ff,0x1c2230,0.85));
-    const dir=new THREE.DirectionalLight(0xffffff,1.05); dir.position.set(6,14,8);
+    // Warm sky / warm ground hemisphere + a single gentle warm directional. No neon.
+    scene.add(new THREE.HemisphereLight(0xf3e8cf,0x6f5a3c,0.85));
+    const dir=new THREE.DirectionalLight(0xfff1d6,1.0); dir.position.set(6,14,8);
     dir.castShadow=true; dir.shadow.mapSize.set(1024,1024);
     dir.shadow.camera.near=1; dir.shadow.camera.far=60;
     dir.shadow.camera.left=-10; dir.shadow.camera.right=10;
     dir.shadow.camera.top=10; dir.shadow.camera.bottom=-10;
     scene.add(dir);
-    const rim=new THREE.DirectionalLight(0x6c8cff,0.35); rim.position.set(-8,4,-6); scene.add(rim);
+    const fill=new THREE.DirectionalLight(0xead9b8,0.3); fill.position.set(-8,4,-6); scene.add(fill);
 
     // ---------- central pole ----------
     const POLE_R=0.55;
     const pole=new THREE.Mesh(
       new THREE.CylinderGeometry(POLE_R,POLE_R,200,24),
-      new THREE.MeshStandardMaterial({color:0x232a3a,roughness:0.6,metalness:0.3,
-        emissive:0x0c1018}));
+      new THREE.MeshStandardMaterial({color:0x4a3b2a,roughness:0.75,metalness:0.05}));
     pole.castShadow=true; scene.add(pole);
 
     // ---------- helix tower ----------
@@ -130,11 +126,10 @@
     const RING_R=3.2;          // disc radius
     const SEG=8;               // segments per ring
     const tower=new THREE.Group(); scene.add(tower); // rotates as a whole
-    const SAFE=0x4ec3ff, DANGER=0xff6f61;
-    const safeMat=new THREE.MeshStandardMaterial({color:SAFE,roughness:0.4,metalness:0.2,
-      emissive:new THREE.Color(SAFE).multiplyScalar(0.12)});
-    const dangerMat=new THREE.MeshStandardMaterial({color:DANGER,roughness:0.35,metalness:0.2,
-      emissive:new THREE.Color(DANGER).multiplyScalar(0.3)});
+    // Safe = warm ochre, danger = oxblood/brick. Honest matte clay, no glow.
+    const SAFE=0xc8923a, DANGER=0x9b3a22;
+    const safeMat=new THREE.MeshStandardMaterial({color:SAFE,roughness:0.8,metalness:0.0});
+    const dangerMat=new THREE.MeshStandardMaterial({color:DANGER,roughness:0.7,metalness:0.0});
 
     const SURF=0.75;   // ball-center rest height above a ring's y (disc top 0.25 + ball r 0.5)
     let rings=[];   // {group, y, segs:[{mesh,type}], passed}
@@ -168,12 +163,12 @@
     const TOWER_RINGS=80;
 
     // ---------- ball ----------
+    // Player ball — warm cream, matte, no glow. Reads against the ochre rings.
+    const BALL_COL=0xefe6d2;
     const ball=new THREE.Mesh(
       new THREE.SphereGeometry(0.5,24,18),
-      new THREE.MeshStandardMaterial({color:0x5ad1a8,roughness:0.25,metalness:0.35,
-        emissive:new THREE.Color(0x5ad1a8).multiplyScalar(0.35)}));
+      new THREE.MeshStandardMaterial({color:BALL_COL,roughness:0.55,metalness:0.0}));
     ball.castShadow=true; scene.add(ball);
-    const ballGlow=new THREE.PointLight(0x5ad1a8,1.2,6); scene.add(ballGlow);
     const BALL_X=RING_R+0.0; // ball sits at the rim of the discs (radius RING_R)
 
     // ---------- particles ----------
@@ -294,7 +289,7 @@
               ring.passed=true; combo++;
               const gain=combo>1?combo:1; score+=gain; scoreEl.textContent=score;
               if(combo>1) showCombo(combo);
-              burst(BALL_X,ring.y,0,0x5ad1a8,combo>1?14:8);
+              burst(BALL_X,ring.y,0,BALL_COL,combo>1?14:8);
             }
           }
         }
@@ -305,7 +300,6 @@
 
       // ball world position (fixed angle, follows ballY)
       ball.position.set(BALL_X,ballY,0);
-      ballGlow.position.set(BALL_X,ballY+0.3,0.4);
 
       // camera follows ball downward smoothly
       const wantCamY=ballY+4;

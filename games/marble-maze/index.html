@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#07080c">
+  <meta name="theme-color" content="#e9dcc0">
   <title>Marble Maze — Gamf</title>
   <meta name="description" content="Tilt the board, roll the marble. Grab every gem, dodge the holes, reach the goal. A 3D tilt-maze.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,16 +11,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    /* genre accent for this game (3D = mint) */
-    body { --gx-accent: #5ad1a8; }
+    /* genre accent for this game — GAMF Quarterly oxblood */
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none;
       -webkit-user-select: none; user-select: none; }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-    /* center toast (level cleared / new level) — purely cosmetic */
+    /* center toast (level cleared / new level) — purely cosmetic, no glow */
     .mm-flash { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 64px);
       text-align: center; z-index: 4; pointer-events: none;
       font-family: var(--gx-font-display); font-weight: 700; font-size: var(--fs-xl);
-      color: var(--gx-accent); text-shadow: 0 0 18px color-mix(in srgb, var(--gx-accent) 70%, transparent);
+      color: var(--gx-accent);
       opacity: 0; transform: translateY(-6px); transition: opacity .25s var(--ease), transform .25s var(--ease); }
     .mm-flash.show { opacity: 1; transform: translateY(0); }
   </style>
@@ -64,7 +64,7 @@
   <div class="gx-modal" id="gxHelp">
     <div class="gx-modal__card">
       <div class="gx-modal__title">How to play</div>
-      <p class="gx-help__obj">Tilt the board to roll the marble, grab every gem, dodge the holes, then reach the glowing goal pad.</p>
+      <p class="gx-help__obj">Tilt the board to roll the marble, grab every gem, dodge the holes, then reach the goal pad.</p>
       <ul class="gx-help__list">
         <li><b>Drag</b> <span>Tilt the board</span></li>
         <li><b>Arrows / WASD</b> <span>Tilt the board</span></li>
@@ -107,7 +107,17 @@
     const WALL_H = 0.7;
     const WALL_T = 0.16;
     const BALL_R = 0.3;
-    const ACCENT = 0x5ad1a8;
+    // ---- GAMF Quarterly warm palette (matte, no neon) ----
+    const C_SKY    = 0xe9dcc0;  // warm cream background
+    const C_FLOOR  = 0x4a3b2a;  // warm brown board floor
+    const C_RIM    = 0x9b3a22;  // oxblood outer frame
+    const C_WALL   = 0x6f6a3b;  // olive inner walls
+    const C_GEM    = 0xc8923a;  // ochre gems
+    const C_HOLE   = 0x2a2018;  // deep brown hole pit
+    const C_HOLERING = 0x9b3a22;// oxblood hole ring (warning)
+    const C_GOAL   = 0x9b3a22;  // oxblood goal pad
+    const C_BALL   = 0xefe6d2;  // cream marble
+    const ACCENT   = C_RIM;     // accent used by sparks / flash
     // convert grid (col,row) -> world (x,z). center cell of grid is origin.
     function gx(c){ return (c - (N - 1) / 2) * CELL; }
     function gz(r){ return (r - (N - 1) / 2) * CELL; }
@@ -123,9 +133,12 @@
 
     // ---------------------------------------------------------------- scene + fog
     const scene = new THREE.Scene();
-    const BG = 0x05060b;
-    scene.background = new THREE.Color(BG);
-    scene.fog = new THREE.Fog(BG, 18, 46);
+    // Solid warm cream background — no gradient skydome, no dark navy.
+    scene.background = new THREE.Color(C_SKY);
+    // Subtle warm fog matching the background. Pushed well past the board so it
+    // never washes gameplay out (the camera retreats to ~53u on tall phones) —
+    // it only feathers the empty distance into the cream background.
+    scene.fog = new THREE.Fog(C_SKY, 70, 140);
 
     const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 200);
     // looking down at the board at an angle (distinct from the runner's tunnel cam)
@@ -133,8 +146,11 @@
     camera.lookAt(0, 0, 0);
 
     // ---------------------------------------------------------------- lights
-    scene.add(new THREE.HemisphereLight(0x88aaff, 0x0a0c16, 0.6));
-    const key = new THREE.DirectionalLight(0xffffff, 1.1);
+    // Gentle warm rig: hemisphere (warm sky / warm ground) + soft ambient +
+    // a single warm directional key. No coloured neon point-lights.
+    scene.add(new THREE.HemisphereLight(0xf3e8cf, 0x6b5a3f, 0.9));
+    scene.add(new THREE.AmbientLight(0xfff2dc, 0.28));
+    const key = new THREE.DirectionalLight(0xfff1d6, 1.05);
     key.position.set(6, 16, 5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -143,21 +159,23 @@
     key.shadow.camera.top = 12; key.shadow.camera.bottom = -12;
     key.shadow.bias = -0.0006;
     scene.add(key);
-    const accentLight = new THREE.PointLight(ACCENT, 1.6, 30, 1.5);
-    accentLight.position.set(0, 6, 0);
-    scene.add(accentLight);
+    // soft warm fill from the opposite side so matte faces aren't muddy
+    const fill = new THREE.DirectionalLight(0xe8d8b6, 0.28);
+    fill.position.set(-6, 6, -8);
+    scene.add(fill);
 
     // ---------------------------------------------------------------- the tilting board group
     // Everything that should tilt together (floor, walls, gems, goal) lives here.
     const board = new THREE.Group();
     scene.add(board);
 
-    // floor
+    // floor — a plain solid warm-brown matte board. A faint warmer grid is
+    // baked in just to read cell edges; no neon lines, no glow.
     const floorTex = (() => {
       const c = document.createElement('canvas'); c.width = 256; c.height = 256;
       const ctx = c.getContext('2d');
-      ctx.fillStyle = '#0c1018'; ctx.fillRect(0, 0, 256, 256);
-      ctx.strokeStyle = 'rgba(90,209,168,0.22)'; ctx.lineWidth = 2;
+      ctx.fillStyle = '#4a3b2a'; ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = 'rgba(111,106,59,0.30)'; ctx.lineWidth = 2;
       const step = 256 / N;
       for (let i = 0; i <= N; i++){
         const p = Math.round(i * step) + 0.5;
@@ -170,16 +188,15 @@
     })();
     const floor = new THREE.Mesh(
       new THREE.BoxGeometry(BOARD, 0.4, BOARD),
-      new THREE.MeshStandardMaterial({ map: floorTex, color: 0x141a26, roughness: 0.7, metalness: 0.2 })
+      new THREE.MeshStandardMaterial({ map: floorTex, color: C_FLOOR, roughness: 0.85, metalness: 0.0 })
     );
     floor.position.y = -0.2;
     floor.receiveShadow = true;
     board.add(floor);
 
-    // outer rim (decorative frame around the play area)
+    // outer rim (frame around the play area) — solid matte oxblood, no glow
     const rimMat = new THREE.MeshStandardMaterial({
-      color: 0x0c1420, emissive: new THREE.Color(ACCENT), emissiveIntensity: 0.7,
-      roughness: 0.35, metalness: 0.6
+      color: C_RIM, roughness: 0.6, metalness: 0.0
     });
     {
       const long = new THREE.BoxGeometry(BOARD + WALL_T * 2, WALL_H, WALL_T);
@@ -193,7 +210,7 @@
     }
 
     // ---------------------------------------------------------------- pooled inner walls
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x2a3346, roughness: 0.6, metalness: 0.3 });
+    const wallMat = new THREE.MeshStandardMaterial({ color: C_WALL, roughness: 0.8, metalness: 0.0 });
     const wallGeoH = new THREE.BoxGeometry(CELL + WALL_T, WALL_H, WALL_T); // spans a horizontal edge
     const wallGeoV = new THREE.BoxGeometry(WALL_T, WALL_H, CELL + WALL_T); // spans a vertical edge
     const WALL_POOL = 220;
@@ -206,9 +223,9 @@
     let wallSegs = []; // active wall segments for collision {x,z,horiz}
 
     // ---------------------------------------------------------------- holes (visual + logic)
-    const holeMat = new THREE.MeshStandardMaterial({ color: 0x05070c, roughness: 1, metalness: 0 });
+    const holeMat = new THREE.MeshStandardMaterial({ color: C_HOLE, roughness: 1, metalness: 0 });
     const holeRing = new THREE.MeshStandardMaterial({
-      color: 0x1a0d12, emissive: 0xff5d6c, emissiveIntensity: 0.9, roughness: 0.4, metalness: 0.3
+      color: C_HOLERING, roughness: 0.7, metalness: 0.0
     });
     const holeGeo = new THREE.CylinderGeometry(BALL_R + 0.16, BALL_R + 0.16, 0.42, 20);
     const ringGeo = new THREE.TorusGeometry(BALL_R + 0.2, 0.05, 8, 24);
@@ -226,7 +243,7 @@
     // ---------------------------------------------------------------- gems
     const gemGeo = new THREE.OctahedronGeometry(0.26, 0);
     const gemMat = new THREE.MeshStandardMaterial({
-      color: 0xfff0a0, emissive: 0xffd36c, emissiveIntensity: 1.1, roughness: 0.2, metalness: 0.4
+      color: C_GEM, roughness: 0.45, metalness: 0.1
     });
     const GEM_POOL = 18;
     const gems = []; // {mesh, x, z, active}
@@ -237,7 +254,7 @@
 
     // ---------------------------------------------------------------- goal pad
     const goalMat = new THREE.MeshStandardMaterial({
-      color: 0x0c2018, emissive: new THREE.Color(ACCENT), emissiveIntensity: 1.3, roughness: 0.3, metalness: 0.4
+      color: C_GOAL, roughness: 0.55, metalness: 0.1
     });
     const goal = new THREE.Mesh(new THREE.CylinderGeometry(BALL_R + 0.26, BALL_R + 0.26, 0.12, 24), goalMat);
     goal.position.y = 0.02; goal.visible = false;
@@ -254,14 +271,11 @@
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(BALL_R, 28, 28),
       new THREE.MeshStandardMaterial({
-        color: 0xffffff, emissive: new THREE.Color(ACCENT), emissiveIntensity: 0.35,
-        roughness: 0.15, metalness: 0.7
+        color: C_BALL, roughness: 0.35, metalness: 0.15
       })
     );
     ball.castShadow = true;
     board.add(ball);
-    const ballLight = new THREE.PointLight(ACCENT, 0.9, 5, 2);
-    ball.add(ballLight);
 
     // ---------------------------------------------------------------- particles
     const sparkGeo = new THREE.SphereGeometry(0.06, 6, 6);
@@ -653,7 +667,7 @@
               g.active = false; g.mesh.visible = false; gemsLeft--;
               score += 10;
               scoreEl.textContent = score;
-              burst(g.x, 0.4, g.z, 0xffd36c, 12);
+              burst(g.x, 0.4, g.z, C_GEM, 12);
             }
           }
 
@@ -662,7 +676,7 @@
             if (!h.active) continue;
             if (Math.hypot(posX - h.x, posZ - h.z) < 0.22){
               fallT = 1;
-              burst(h.x, 0.1, h.z, 0xff5d6c, 16);
+              burst(h.x, 0.1, h.z, C_HOLERING, 16);
               break;
             }
           }
@@ -681,9 +695,10 @@
           }
         }
 
-        accentLight.intensity = 1.5 + Math.sin(t * 0.15) * 0.3;
-        // pulse the goal ring brighter when all gems are gathered
-        goalMat.emissiveIntensity = gemsLeft <= 0 ? 1.6 + Math.sin(t * 0.25) * 0.6 : 0.9;
+        // subtle gameplay feedback: the goal ring gently breathes once every gem
+        // is gathered (a size pulse, not a glow)
+        const goalPulse = gemsLeft <= 0 ? 1 + Math.sin(t * 0.18) * 0.12 : 1;
+        goalRing.scale.set(goalPulse, goalPulse, goalPulse);
       }
 
       // particles
