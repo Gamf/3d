@@ -99,15 +99,21 @@
     const flashEl = document.getElementById('flash');
     bestEl.textContent = best;
 
-    // ---------------------------------------------------------------- warm palette (GAMF Quarterly)
-    // Solid warm cream daylight sky — no neon, no glow, no gradients.
-    const BG       = 0xe9dcc0;   // warm cream sky / background
-    const GROUND   = 0xb9a884;   // sun-bleached sand ground
-    const RED      = 0x9b3a22;   // oxblood accent (crash / wings)
-    const AMBER    = 0xc8923a;   // ochre accent (scored / nose)
-    const BONE     = 0xefe6d2;   // cream glider body
-    const OLIVE    = 0x6f6a3b;   // olive ring gates
-    const ACCENT   = OLIVE;      // ring gate colour (matte olive)
+    // ---------------------------------------------------------------- palette
+    // Reads as the classic flap-to-fly arcade game: light-blue daylight sky,
+    // green pipe-style gates, a small yellow/orange bird. Kept matte + calm —
+    // no neon, no glow, no gradients. The gameplay elements (sky/pipes/bird)
+    // step outside the warm palette so the classic is recognisable at a glance.
+    const BG       = 0x8ecadf;   // iconic light-blue daylight sky
+    const GROUND   = 0xd9c27a;   // sandy ground band
+    const RED      = 0x9b3a22;   // oxblood accent (crash burst)
+    const AMBER    = 0xc8923a;   // ochre accent (scored flash)
+    const BIRD     = 0xf2c531;   // yellow bird body
+    const BIRD_BELLY = 0xf6e3a8; // pale belly
+    const BEAK     = 0xe08a2c;   // orange beak
+    const PIPE     = 0x6db33f;   // signature green pipe
+    const PIPE_DK  = 0x5a9433;   // darker green pipe rim/shade
+    const ACCENT   = PIPE;       // ring gate colour (green pipe)
 
     // ---------------------------------------------------------------- world config
     const SPAWN_Z   = -150;      // where gates appear (far into the haze)
@@ -166,42 +172,57 @@
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // ---------------------------------------------------------------- glider (the player)
-    // Honest matte materials — cream body, oxblood wings, ochre nose. No glow.
-    const glider = new THREE.Group();
-    // fuselage
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.34, 1.0, 6, 12),
-      new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.7, metalness: 0.0 })
-    );
-    body.rotation.x = Math.PI / 2;
+    // ---------------------------------------------------------------- bird (the player)
+    // A small chubby yellow bird with a pale belly, orange beak, a flapping
+    // wing and a dot eye — original simple shapes, but reads as the classic
+    // flap-to-fly arcade hero. Honest matte materials, no glow.
+    const glider = new THREE.Group();   // kept the name so all physics code is untouched
+    const birdMat  = new THREE.MeshStandardMaterial({ color: BIRD, roughness: 0.7, metalness: 0.0 });
+    const bellyMat = new THREE.MeshStandardMaterial({ color: BIRD_BELLY, roughness: 0.75, metalness: 0.0 });
+    // round body (faces -z, the flight direction)
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.62, 18, 14), birdMat);
+    body.scale.set(1.0, 0.92, 1.12);
     body.castShadow = true;
     glider.add(body);
-    // wings
-    const wingMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.75, metalness: 0.0,
+    // pale belly patch, slightly forward + down
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 12), bellyMat);
+    belly.scale.set(0.95, 0.8, 0.9);
+    belly.position.set(0, -0.16, -0.18);
+    glider.add(belly);
+    // orange beak pointing forward (-z)
+    const beakMat = new THREE.MeshStandardMaterial({ color: BEAK, roughness: 0.6, metalness: 0.0 });
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.42, 8), beakMat);
+    beak.rotation.x = -Math.PI / 2;
+    beak.position.set(0, -0.05, -0.78);
+    glider.add(beak);
+    // dot eyes (white + ink pupil) on each side near the front
+    const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xf6efe2, roughness: 0.6 });
+    const pupilMat    = new THREE.MeshStandardMaterial({ color: 0x221f17, roughness: 0.5 });
+    for (const sx of [-1, 1]){
+      const ew = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), eyeWhiteMat);
+      ew.position.set(0.26 * sx, 0.18, -0.42);
+      glider.add(ew);
+      const pp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), pupilMat);
+      pp.position.set(0.30 * sx, 0.18, -0.52);
+      glider.add(pp);
+    }
+    // a single flapping wing (orange-tinted), animated with vy in the loop
+    const wingMat = new THREE.MeshStandardMaterial({ color: BEAK, roughness: 0.75, metalness: 0.0,
       side: THREE.DoubleSide });
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.08, 0.9), wingMat);
-    wing.position.set(0, 0, 0.1);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.08, 0.4), wingMat);
+    wing.position.set(0.5, 0.05, 0.12);
     wing.castShadow = true;
     glider.add(wing);
-    // tail fin
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.6), wingMat);
-    fin.position.set(0, 0.34, 0.8);
-    glider.add(fin);
-    // nose accent
-    const nose = new THREE.Mesh(
-      new THREE.ConeGeometry(0.34, 0.5, 12),
-      new THREE.MeshStandardMaterial({ color: AMBER, roughness: 0.65, metalness: 0.0 })
-    );
-    nose.rotation.x = -Math.PI / 2;
-    nose.position.set(0, 0, -0.85);
-    glider.add(nose);
+    // tiny tail fan at the back (+z)
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.34), wingMat);
+    tail.position.set(0, 0.06, 0.66);
+    glider.add(tail);
     glider.position.set(0, 0, PLAYER_Z);
     scene.add(glider);
 
     // ---------------------------------------------------------------- trail (pooled puffs)
     const trailGeo = new THREE.SphereGeometry(0.16, 6, 6);
-    const trailMat = new THREE.MeshBasicMaterial({ color: 0xe8d6b4, transparent: true, opacity: 0.5 });
+    const trailMat = new THREE.MeshBasicMaterial({ color: 0xf3f7fb, transparent: true, opacity: 0.5 });
     const TRAIL_N = 26;
     const trail = [];
     for (let i = 0; i < TRAIL_N; i++){
@@ -218,9 +239,13 @@
       p.mesh.scale.setScalar(srange(0.7, 1.3));
     }
 
-    // ---------------------------------------------------------------- ring gates (pooled)
-    // Honest matte olive ring gates — no emissive glow, no halo plane.
-    const ringGeo = new THREE.TorusGeometry(RING_R, 0.34, 10, 28);
+    // ---------------------------------------------------------------- pipe gates (pooled)
+    // The signature green pipe, reimagined as a ring gap you fly through: a
+    // chunky green torus frame with a darker green outer rim, so it reads as
+    // the classic pipe colour identity. Matte, no emissive glow, no halo plane.
+    const ringGeo = new THREE.TorusGeometry(RING_R, 0.5, 12, 32);   // chunkier pipe-like frame
+    const rimGeo  = new THREE.TorusGeometry(RING_R + 0.18, 0.22, 10, 32);
+    const rimMat  = new THREE.MeshStandardMaterial({ color: PIPE_DK, roughness: 0.7, metalness: 0.0 });
     function makeRingMat(){
       return new THREE.MeshStandardMaterial({
         color: ACCENT, roughness: 0.7, metalness: 0.0
@@ -233,6 +258,9 @@
       const ring = new THREE.Mesh(ringGeo, makeRingMat());
       ring.castShadow = true;
       g.add(ring);
+      // darker rim hoops front + back to suggest pipe-end lips
+      const rimF = new THREE.Mesh(rimGeo, rimMat); rimF.position.z = -0.42; g.add(rimF);
+      const rimB = new THREE.Mesh(rimGeo, rimMat); rimB.position.z =  0.42; g.add(rimB);
       g.visible = false;
       scene.add(g);
       gates.push({ group: g, ring, active: false, scored: false, x: 0, y: 0 });
@@ -435,6 +463,9 @@
         glider.rotation.z = -vy * 0.7;
         glider.rotation.x = vy * 0.5;
         glider.position.x += (0 - glider.position.x) * 0.04; // drift gently to centre
+
+        // wing flap: lift on rising vy, settle when gliding down
+        wing.rotation.z = -Math.max(-0.5, Math.min(1.0, vy * 2.6 + 0.15));
 
         // ceiling / floor = death
         if (glider.position.y > Y_LIMIT || glider.position.y < -Y_LIMIT){

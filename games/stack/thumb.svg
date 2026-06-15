@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <!-- cream ground -->
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <rect y="150" width="320" height="50" fill="#f3ece0"/>
+
+  <!-- a tower of stacked isometric slabs, hue sweeping up like the classic -->
+  <!-- each slab: top face (light), left face (mid), right face (dark) -->
+
+  <!-- layer 1 (bottom, oxblood) -->
+  <polygon points="160,150 210,124 160,98 110,124" fill="#b9532f"/>
+  <polygon points="110,124 160,150 160,170 110,144" fill="#9b3a22"/>
+  <polygon points="210,124 160,150 160,170 210,144" fill="#7e2e1b"/>
+
+  <!-- layer 2 (ochre) -->
+  <polygon points="160,98 208,73 160,48 112,73" fill="#d8a455"/>
+  <polygon points="112,73 160,98 160,116 112,91" fill="#c8923a"/>
+  <polygon points="208,73 160,98 160,116 208,91" fill="#a8762a"/>
+
+  <!-- layer 3 (olive) -->
+  <polygon points="158,48 200,25 154,2 112,25" fill="#84804b"/>
+  <polygon points="112,25 158,48 158,64 112,41" fill="#6f6a3b"/>
+  <polygon points="200,25 158,48 158,64 200,41" fill="#56532e"/>
+
+  <!-- the moving block, slightly offset to the right (about to be dropped) -->
+  <polygon points="232,86 280,61 232,36 184,61" fill="#c97a48"/>
+  <polygon points="184,61 232,86 232,104 184,79" fill="#a4623a"/>
+  <polygon points="280,61 232,86 232,104 280,79" fill="#86502e"/>
+
+  <!-- a sliced-off chip tumbling away (the overhang that got cut) -->
+  <polygon points="46,118 70,106 58,90 34,102" fill="#c8923a"/>
+  <polygon points="34,102 46,118 46,128 34,112" fill="#a8762a"/>
+</svg>

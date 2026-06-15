@@ -116,16 +116,26 @@
     const startPrompt = document.getElementById('startPrompt');
     bestEl.textContent = best;
 
-    // ---------------------------------------------------------------- warm palette (GAMF Quarterly)
-    // Warm 1970s print catalogue: cream stock, oxblood ink, earthy tones.
-    // No neon, no glow, no gradients. The tube interior runs a touch dark, so
-    // the scene background is a warm dusk brown rather than a near-black void.
-    const C_BG     = 0x3a2c20;  // warm dusk brown — scene background
-    const C_TUBE   = 0x4a3b2a;  // warm brown tunnel wall
-    const C_OXBLOOD= 0x9b3a22;  // oxblood / brick — ring panels & ship
-    const C_OCHRE  = 0xc8923a;  // ochre — alternate ring panels & accents
-    const C_OLIVE  = 0x6f6a3b;  // olive
-    const C_CLAY   = 0xa4623a;  // clay
+    // ---------------------------------------------------------------- palette — TEMPEST tube
+    // This dive down a segmented tube, riding the rim and dodging shapes that
+    // climb the well, reads as Atari's TEMPEST. So the GAMEPLAY scene borrows
+    // Tempest's recognisable signature: a deep indigo well, an electric-blue
+    // vector tube ribbed by segment lines, a bright yellow claw on the rim, and
+    // oncoming obstacle bands in the classic vector colours (cyan / yellow /
+    // red / green). Kept tasteful + matte — solid background, flat shapes, NO
+    // neon glow / bloom / particle field. (Originality: our own simple geometry,
+    // not Atari's sprites.)
+    const C_BG     = 0x0a0a2a;  // deep indigo well — scene background
+    const C_TUBE   = 0x1b3a8f;  // electric tube blue — tunnel wall
+    const C_OXBLOOD= 0x9b3a22;  // oxblood / brick — (HUD accent, kept warm)
+    const C_TBLUE  = 0x2e6df0;  // bright vector blue — ring band
+    const C_TCYAN  = 0x32d6e6;  // cyan — ship + ring band
+    const C_TYELLOW= 0xf2c33a;  // vector yellow — player claw + ring band
+    const C_TRED   = 0xe23b2e;  // vector red — ring band
+    const C_TGREEN = 0x3ec96a;  // vector green — ring band
+    const C_OCHRE  = 0xf2c33a;  // (alias kept for spark/accent calls) ochre→yellow
+    const C_OLIVE  = 0x6f6a3b;  // olive (unused gameplay; kept for safety)
+    const C_CLAY   = 0xa4623a;  // clay  (unused gameplay; kept for safety)
     const C_CREAM  = 0xefe6d2;  // cream
 
     // ---------------------------------------------------------------- tunnel config
@@ -146,9 +156,9 @@
 
     // ---------------------------------------------------------------- scene + fog
     const scene = new THREE.Scene();
-    // Solid warm dusk-brown background — no gradient skydome, no near-black void.
+    // Solid deep-indigo background (Tempest well) — no gradient skydome, no void.
     scene.background = new THREE.Color(C_BG);
-    // Subtle warm fog matching the background for soft depth. 'far' must reach
+    // Fog matching the background for soft depth into the well. 'far' must reach
     // beyond where rings spawn (SPAWN_Z, ~219 units ahead of the camera) or
     // freshly placed rings fade fully into the background and never appear.
     scene.fog = new THREE.Fog(C_BG, 60, 300);
@@ -158,37 +168,40 @@
     camera.lookAt(0, 0, -40);
 
     // ---------------------------------------------------------------- lights
-    // Gentle, warm, no colored neon point-lights: soft hemisphere (warm sky /
-    // warm ground) + a single warm directional key that reaches every ring,
-    // including the far ones near the spawn point (directional = infinite range).
-    scene.add(new THREE.HemisphereLight(0xe9dcc0, 0x2a2018, 0.7));
-    scene.add(new THREE.AmbientLight(0xfff2dc, 0.35));
-    const key = new THREE.DirectionalLight(0xfff1d6, 1.15);
+    // Cool, even, no neon point-glow: a bright near-white key + fill so the blue
+    // tube and the vector-colour bands keep their true identity (a warm key would
+    // muddy the electric blue). A faint cool hemisphere lifts the deep well floor.
+    scene.add(new THREE.HemisphereLight(0xbcd2ff, 0x0a0a2a, 0.85));
+    scene.add(new THREE.AmbientLight(0xeaf0ff, 0.55));
+    const key = new THREE.DirectionalLight(0xffffff, 1.15);
     key.position.set(4, 8, 6);
     scene.add(key);
-    // a second, dimmer warm fill aimed down the tunnel so distant rings read.
-    const fill = new THREE.DirectionalLight(0xf3e2bf, 0.55);
+    // a second, dimmer fill aimed down the tunnel so distant rings read.
+    const fill = new THREE.DirectionalLight(0xdfe8ff, 0.6);
     fill.position.set(-3, -2, 4);
     scene.add(fill);
-    // a soft warm headlamp riding with the camera keeps the near tube readable.
-    const headlamp = new THREE.PointLight(C_CREAM, 1.2, 70, 1.4);
+    // a soft cool headlamp riding with the camera keeps the near tube readable.
+    const headlamp = new THREE.PointLight(0xeaf2ff, 1.25, 70, 1.4);
     headlamp.position.set(0, 0, 6);
     scene.add(headlamp);
 
     // ---------------------------------------------------------------- tunnel wall
-    // A long cylinder shell, open-ended, drawn from inside (BackSide). A printed
-    // catalogue look: warm matte brown stock with faint darker ribs — no neon,
-    // no emissive glow.
+    // A long cylinder shell, open-ended, drawn from inside (BackSide). TEMPEST's
+    // signature is the ribbed vector tube: bright blue lines running DOWN the
+    // well between each segment, on a dark-blue ground. We bake those rib lines
+    // (one bright longitudinal stripe per panel column) plus faint depth rungs.
+    // Matte / lit — no emissive glow.
     const tubeTex = (() => {
       const c = document.createElement('canvas'); c.width = 64; c.height = 256;
       const ctx = c.getContext('2d');
-      ctx.fillStyle = '#4a3b2a'; ctx.fillRect(0, 0, 64, 256);
-      // faint darker ribs running around the tube (horizontal bands)
-      ctx.fillStyle = 'rgba(40,30,20,0.35)';
-      for (let y = 0; y < 256; y += 32){ ctx.fillRect(0, y, 64, 3); }
-      // a slightly lighter longitudinal seam
-      ctx.fillStyle = 'rgba(200,146,58,0.18)';
-      ctx.fillRect(0, 0, 2, 256);
+      ctx.fillStyle = '#142a66'; ctx.fillRect(0, 0, 64, 256);
+      // bright vector rib running down the well at the segment boundary
+      ctx.fillStyle = '#4f86ff';
+      ctx.fillRect(0, 0, 4, 256);
+      ctx.fillRect(60, 0, 4, 256);
+      // faint cross-rungs for forward-depth read (Tempest's depth lines)
+      ctx.fillStyle = 'rgba(110,160,255,0.16)';
+      for (let y = 0; y < 256; y += 32){ ctx.fillRect(0, y, 64, 2); }
       const t = new THREE.CanvasTexture(c);
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.repeat.set(SEGMENTS, 26);
@@ -199,7 +212,7 @@
       new THREE.CylinderGeometry(TUBE_R, TUBE_R, 440, SEGMENTS, 1, true),
       new THREE.MeshStandardMaterial({
         map: tubeTex, color: C_TUBE, side: THREE.BackSide,
-        roughness: 0.92, metalness: 0.0
+        roughness: 0.88, metalness: 0.0
       })
     );
     tube.rotation.x = Math.PI / 2;       // lay the cylinder down the -z axis
@@ -217,18 +230,20 @@
     ship.position.set(0, SHIP_ORBIT, 0);  // sits at the top of the circle by default
     shipPivot.add(ship);
 
+    // TEMPEST's player is the bright YELLOW claw straddling the rim: a flat 4-sided
+    // spike pointing down the well, with a cyan collar marking its lane on the rim.
     const shipBody = new THREE.Mesh(
       new THREE.ConeGeometry(0.6, 1.7, 4),
       new THREE.MeshStandardMaterial({
-        color: C_OXBLOOD, roughness: 0.55, metalness: 0.1, flatShading: true
+        color: C_TYELLOW, roughness: 0.5, metalness: 0.1, flatShading: true
       })
     );
     shipBody.rotation.x = -Math.PI / 2;   // point the nose down -z (into the tunnel)
     ship.add(shipBody);
-    // a matte ochre collar ring around the ship (gameplay marker, not a glow)
+    // a matte cyan collar ring around the claw (lane marker, not a glow)
     const shipHalo = new THREE.Mesh(
       new THREE.TorusGeometry(0.7, 0.08, 8, 20),
-      new THREE.MeshStandardMaterial({ color: C_OCHRE, roughness: 0.6, metalness: 0.1 })
+      new THREE.MeshStandardMaterial({ color: C_TCYAN, roughness: 0.55, metalness: 0.1 })
     );
     ship.add(shipHalo);
     // orient the ship so "down toward the wall" = away from centre
@@ -246,7 +261,8 @@
         color: hex, roughness: 0.7, metalness: 0.05
       });
     }
-    const RING_COLORS = [C_OXBLOOD, C_OCHRE, C_OLIVE, C_CLAY];
+    // oncoming ring bands cycle Tempest's vector enemy colours
+    const RING_COLORS = [C_TCYAN, C_TYELLOW, C_TRED, C_TGREEN, C_TBLUE];
 
     const RING_POOL = 18;
     const rings = [];

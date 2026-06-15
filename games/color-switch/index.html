@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#e9dcc0">
+  <meta name="theme-color" content="#222634">
   <title>Color Switch — Gamf</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -92,14 +92,19 @@
     function srange(a,b){ return a + (b-a)*srnd(); }
     function spick(arr){ return arr[Math.floor(srnd()*arr.length)]; }
 
-    // ---------- palette (GAMF Quarterly — warm earthy, matte) ----------
-    // Ball + ring arcs use 4 warm catalogue inks chosen for clear separation
-    // (the core mechanic is matching colours): oxblood, ochre, olive, warm brown.
-    const COLORS = [0x9b3a22, 0xc8923a, 0x6f6a3b, 0x4a3b2a]; // oxblood, ochre, olive, brown
+    // ---------- palette ----------
+    // RECOGNISABILITY: Color Switch's signature is FOUR vivid, instantly-distinct
+    // colours on the ball + ring segments — that clear colour identity is the
+    // whole point of the match mechanic, so we step outside the warm catalogue
+    // for the gameplay elements (the brief allows this for recognisability).
+    // Our own simple inks (not any game's exact swatches): coral-red, gold,
+    // teal-green, indigo-blue — four well-separated hues that pop yet stay matte.
+    const COLORS = [0xe0503a, 0xe5b13a, 0x2f9e7e, 0x3a6ec8]; // red, gold, green, blue
     const COLOR_OBJ = COLORS.map(c=>new THREE.Color(c));
-    // warm scene colours
-    const C_SKY    = 0xe9dcc0; // cream stock — solid background
-    const C_GROUND = 0x6f5a3c; // warm brown ground tone
+    // Scene stays calm + tasteful: a soft deep slate-navy backdrop (the classic's
+    // dark stage, done MATTE — no neon, no glow) so the four hues read clearly.
+    const C_SKY    = 0x222634; // deep slate-navy — solid, matte background
+    const C_GROUND = 0x171a24; // darker floor tone
 
     // ---------- high score ----------
     const BEST_KEY = 'gamf-3d-color-switch-best';
@@ -121,15 +126,16 @@
     const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 200);
     camera.position.set(0, 4, 12);
 
-    // Gentle warm lighting: soft hemisphere (warm sky / warm ground) + one key sun.
-    scene.add(new THREE.HemisphereLight(0xf3e8cf, C_GROUND, 0.9));
-    const dir = new THREE.DirectionalLight(0xfff1d6, 1.0); dir.position.set(5, 14, 9);
+    // Clean, neutral stage lighting (no warm cast now the backdrop is slate):
+    // bright ambient hemisphere + one key light so the vivid hues stay true.
+    scene.add(new THREE.HemisphereLight(0xeef1f6, C_GROUND, 1.05));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(5, 14, 9);
     dir.castShadow = true; dir.shadow.mapSize.set(1024,1024);
     dir.shadow.camera.near = 1; dir.shadow.camera.far = 70;
     dir.shadow.camera.left = -12; dir.shadow.camera.right = 12;
     dir.shadow.camera.top = 14; dir.shadow.camera.bottom = -14;
     scene.add(dir);
-    const fill = new THREE.DirectionalLight(0xe8d8b6, 0.28); fill.position.set(-8,4,-6); scene.add(fill);
+    const fill = new THREE.DirectionalLight(0xbcc6da, 0.3); fill.position.set(-8,4,-6); scene.add(fill);
 
     // ---------- ball ----------
     // Honest matte sphere — warm catalogue ink, no glow / emissive bloom.
@@ -155,7 +161,7 @@
     // by a brief, subtle warm flash on a cleared ring (see below).
     const arcMats = COLOR_OBJ.map(c=>new THREE.MeshStandardMaterial({
       color:c, roughness:0.78, metalness:0.0 }));
-    const FLASH = new THREE.Color(0xefe6d2); // warm cream tint for the pass flash
+    const FLASH = new THREE.Color(0xf2f4fa); // soft white tint for the pass flash
     const BLACK = new THREE.Color(0x000000); // matte resting emissive
 
     const NUM_RINGS = 140;    // generous run length
@@ -274,7 +280,7 @@
       document.getElementById('bestScore').textContent = best;
       document.getElementById('newBest').style.display = (isBest && score>0) ? 'block' : 'none';
       document.getElementById('over').classList.add('gx-show');
-      burst(ball.position.x, ball.position.y, ball.position.z, 0x9b3a22, 26);
+      burst(ball.position.x, ball.position.y, ball.position.z, COLORS[ball.userData.ci], 26);
     }
 
     function togglePause(){ if(over || !started) return; paused = !paused;

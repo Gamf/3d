@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="320" height="200">
+  <!-- ground -->
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <!-- the tube well: an outer octagon rim and an inner one, joined by spokes -->
+  <!-- outer rim -->
+  <polygon points="160,20 250,55 285,140 215,185 105,185 35,140 70,55"
+           fill="#221f17"/>
+  <!-- inner vanishing octagon -->
+  <polygon points="160,86 188,99 198,128 182,150 138,150 122,128 132,99"
+           fill="#9b3a22"/>
+  <!-- spokes converging into the well -->
+  <polygon points="160,20 132,99 188,99" fill="#c8923a"/>
+  <polygon points="250,55 188,99 198,128" fill="#6f6a3b"/>
+  <polygon points="285,140 198,128 182,150" fill="#c8923a"/>
+  <polygon points="215,185 182,150 138,150" fill="#6f6a3b"/>
+  <polygon points="105,185 138,150 122,128" fill="#c8923a"/>
+  <polygon points="35,140 122,128 132,99" fill="#6f6a3b"/>
+  <polygon points="70,55 132,99 160,20" fill="#6f6a3b"/>
+  <!-- the yellow claw riding the rim (bottom segment) -->
+  <polygon points="160,150 146,182 174,182" fill="#c8923a"/>
+  <polygon points="153,166 160,150 167,166" fill="#221f17"/>
+  <!-- an oncoming shape climbing the well -->
+  <polygon points="160,108 150,124 170,124" fill="#9b3a22"/>
+</svg>

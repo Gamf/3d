@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <!-- rotating colour ring split into four quarters (the obstacle) -->
+  <g transform="translate(200 100)">
+    <path d="M 0 -46 A 46 46 0 0 1 46 0 L 26 0 A 26 26 0 0 0 0 -26 Z" fill="#9b3a22"/>
+    <path d="M 46 0 A 46 46 0 0 1 0 46 L 0 26 A 26 26 0 0 0 26 0 Z" fill="#c8923a"/>
+    <path d="M 0 46 A 46 46 0 0 1 -46 0 L -26 0 A 26 26 0 0 0 0 26 Z" fill="#6f6a3b"/>
+    <path d="M -46 0 A 46 46 0 0 1 0 -46 L 0 -26 A 26 26 0 0 0 -26 0 Z" fill="#221f17"/>
+  </g>
+  <!-- the ball threading up through the ring's centre hole -->
+  <circle cx="200" cy="100" r="14" fill="#9b3a22"/>
+  <circle cx="200" cy="100" r="14" fill="none" stroke="#221f17" stroke-width="2"/>
+  <!-- second smaller ring above, hinting the vertical tower -->
+  <g transform="translate(96 56) scale(0.62)">
+    <path d="M 0 -46 A 46 46 0 0 1 46 0 L 26 0 A 26 26 0 0 0 0 -26 Z" fill="#c8923a"/>
+    <path d="M 46 0 A 46 46 0 0 1 0 46 L 0 26 A 26 26 0 0 0 26 0 Z" fill="#6f6a3b"/>
+    <path d="M 0 46 A 46 46 0 0 1 -46 0 L -26 0 A 26 26 0 0 0 0 26 Z" fill="#9b3a22"/>
+    <path d="M -46 0 A 46 46 0 0 1 0 -46 L 0 -26 A 26 26 0 0 0 -26 0 Z" fill="#221f17"/>
+  </g>
+  <!-- a colour-swap prism between the rings -->
+  <path d="M 140 132 L 152 144 L 140 156 L 128 144 Z" fill="#6f6a3b"/>
+  <path d="M 140 132 L 152 144 L 140 156 L 128 144 Z" fill="none" stroke="#221f17" stroke-width="2"/>
+</svg>

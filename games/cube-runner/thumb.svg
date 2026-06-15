@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="320" height="200">
+  <!-- warm sky -->
+  <rect width="320" height="200" fill="#f3ece0"/>
+  <!-- vast flat field running to the horizon -->
+  <polygon points="0,200 320,200 232,92 88,92" fill="#efe6d2"/>
+  <!-- bright warm horizon band where the field meets the sky -->
+  <rect x="88" y="86" width="144" height="8" fill="#c8923a"/>
+  <!-- olive side rails framing the lanes -->
+  <polygon points="88,92 96,92 24,200 0,200" fill="#6f6a3b"/>
+  <polygon points="232,92 224,92 296,200 320,200" fill="#6f6a3b"/>
+
+  <!-- field of cubes rushing toward the player (small far -> large near) -->
+  <!-- far row -->
+  <g>
+    <polygon points="128,100 138,100 138,108 128,108" fill="#9b3a22"/>
+    <polygon points="128,100 132,96 142,96 138,100" fill="#a4623a"/>
+    <polygon points="138,100 142,96 142,104 138,108" fill="#7a2c1a"/>
+  </g>
+  <g>
+    <polygon points="182,100 192,100 192,108 182,108" fill="#6f6a3b"/>
+    <polygon points="182,100 186,96 196,96 192,100" fill="#8a8550"/>
+    <polygon points="192,100 196,96 196,104 192,108" fill="#565232"/>
+  </g>
+
+  <!-- mid row -->
+  <g>
+    <polygon points="104,124 122,124 122,140 104,140" fill="#c8923a"/>
+    <polygon points="104,124 112,116 130,116 122,124" fill="#dcab57"/>
+    <polygon points="122,124 130,116 130,132 122,140" fill="#a8762a"/>
+  </g>
+  <g>
+    <polygon points="200,124 218,124 218,140 200,140" fill="#9b3a22"/>
+    <polygon points="200,124 208,116 226,116 218,124" fill="#b05236"/>
+    <polygon points="218,124 226,116 226,132 218,140" fill="#7a2c1a"/>
+  </g>
+
+  <!-- near cube -->
+  <g>
+    <polygon points="146,150 174,150 174,176 146,176" fill="#6f6a3b"/>
+    <polygon points="146,150 158,138 186,138 174,150" fill="#8a8550"/>
+    <polygon points="174,150 186,138 186,164 174,176" fill="#565232"/>
+  </g>
+
+  <!-- player wedge skimming the field, pointing down-field -->
+  <polygon points="160,182 146,200 174,200" fill="#9b3a22"/>
+  <polygon points="160,182 174,200 160,196" fill="#7a2c1a"/>
+</svg>

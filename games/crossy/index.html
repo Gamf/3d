@@ -102,18 +102,27 @@
     // ---------------------------------------------------------------- palette
     // GAMF Quarterly — warm 1970s print catalogue: cream stock, oxblood accent,
     // ochre / olive / clay / warm browns. No neon, no glow, no gradients.
+    // The scene keeps the warm GAMF stock for the SKY/background, but the
+    // gameplay lanes lean into Frogger / Crossy-Road's recognisable signature:
+    // clearly READABLE green grass strips, a dark grey asphalt road, and — most
+    // iconic of all — a blue river you cross on floating logs. Kept matte and
+    // calm (no neon, no glow), just honest lane colours so it reads at a glance.
     const COL = {
       bg:    0xe9dcc0,            // warm cream daylight sky / background
-      grass: 0x6f6a3b,  grass2: 0x615d33,   // olive field
-      road:  0x4a3b2a,  road2:  0x423427,   // warm asphalt brown
-      water: 0x8a6f3f,  water2: 0x7d6438,   // muddy ochre river (warm, not blue)
+      grass: 0x6f8a3c,  grass2: 0x5f7e34,   // bright frog-green safe strips
+      road:  0x3b3a37,  road2:  0x343330,   // dark asphalt road (lane dividers below)
+      lane:  0xc8923a,           // dashed ochre lane marking on the road
+      water: 0x3f78a8,  water2: 0x366c99,   // blue river (the classic crossing)
+      foam:  0x9fc3df,           // pale ripple cap on the water
       log:   0x6e4a2c,
-      bone:  0xefe6d2,           // cream player body
+      bone:  0xeae3cf,           // pale player body (subtle frog-green tint below)
+      frog:  0x7aa23e,           // frog-green hopper skin
       red:   0x9b3a22,  amber:  0xc8923a, clay: 0xa4623a,   // oxblood / ochre / clay
       rail:  0x4a3b2a
     };
-    // car bodies pull only from the warm earthy palette
-    const CAR_COLORS = [0x9b3a22, 0xc8923a, 0xa4623a, 0x6f6a3b, 0x4a3b2a, 0xefe6d2];
+    // car bodies: keep the warm earthy print palette, but include a couple of
+    // brighter "traffic" hues so the road lanes read as busy cars at a glance.
+    const CAR_COLORS = [0x9b3a22, 0xc8923a, 0xa4623a, 0x6f6a3b, 0xeae3cf, 0x4a6a8a];
 
     // ---------------------------------------------------------------- grid config
     const TILE = 1;          // world units per cell
@@ -168,23 +177,31 @@
       });
     }
 
-    // ---------------------------------------------------------------- player (a little blocky chicken-ish hopper)
+    // ---------------------------------------------------------------- player (a little blocky frog hopper — the classic river-crosser)
     const player = new THREE.Group();
     (() => {
-      const body = new THREE.Mesh(boxGeo, mat(COL.bone, { rough: 0.7 }));
-      body.scale.set(0.52, 0.42, 0.52); body.position.y = 0.27;
+      // chunky green frog body + paler belly, two eye-bumps on top
+      const body = new THREE.Mesh(boxGeo, mat(COL.frog, { rough: 0.7 }));
+      body.scale.set(0.56, 0.4, 0.56); body.position.y = 0.24;
       body.castShadow = true;
-      const head = new THREE.Mesh(boxGeo, mat(COL.bone, { rough: 0.7 }));
-      head.scale.set(0.4, 0.4, 0.4); head.position.set(0, 0.62, 0.04);
+      const belly = new THREE.Mesh(boxGeo, mat(COL.bone, { rough: 0.75 }));
+      belly.scale.set(0.4, 0.16, 0.42); belly.position.set(0, 0.12, 0.04);
+      const head = new THREE.Mesh(boxGeo, mat(COL.frog, { rough: 0.7 }));
+      head.scale.set(0.5, 0.26, 0.34); head.position.set(0, 0.5, 0.1);
       head.castShadow = true;
-      const beak = new THREE.Mesh(boxGeo, mat(COL.amber, { rough: 0.6 }));
-      beak.scale.set(0.14, 0.12, 0.18); beak.position.set(0, 0.6, 0.27);
-      const comb = new THREE.Mesh(boxGeo, mat(COL.red, { rough: 0.6 }));
-      comb.scale.set(0.1, 0.16, 0.2); comb.position.set(0, 0.86, 0.02);
-      const eyeL = new THREE.Mesh(boxGeo, mat(0x1b0f0c));
-      eyeL.scale.set(0.08, 0.08, 0.06); eyeL.position.set(0.12, 0.66, 0.2);
-      const eyeR = eyeL.clone(); eyeR.position.x = -0.12;
-      player.add(body, head, beak, comb, eyeL, eyeR);
+      // bulging eye stalks (the frog's signature top-of-head eyes)
+      const eyeBumpL = new THREE.Mesh(boxGeo, mat(COL.frog, { rough: 0.7 }));
+      eyeBumpL.scale.set(0.18, 0.18, 0.18); eyeBumpL.position.set(0.16, 0.66, 0.04);
+      eyeBumpL.castShadow = true;
+      const eyeBumpR = eyeBumpL.clone(); eyeBumpR.position.x = -0.16;
+      const eyeL = new THREE.Mesh(boxGeo, mat(0x1b1208));
+      eyeL.scale.set(0.1, 0.1, 0.08); eyeL.position.set(0.16, 0.7, 0.13);
+      const eyeR = eyeL.clone(); eyeR.position.x = -0.16;
+      // little webbed front feet poking forward
+      const footL = new THREE.Mesh(boxGeo, mat(COL.frog, { rough: 0.8 }));
+      footL.scale.set(0.16, 0.1, 0.2); footL.position.set(0.18, 0.05, 0.26);
+      const footR = footL.clone(); footR.position.x = -0.18;
+      player.add(body, belly, head, eyeBumpL, eyeBumpR, eyeL, eyeR, footL, footR);
     })();
     scene.add(player);
     // subtle ground shadow disc so the hopper reads while airborne
@@ -240,7 +257,7 @@
     function makeLilypad(){
       const m = new THREE.Mesh(
         new THREE.CylinderGeometry(0.42, 0.42, 0.08, 12),
-        mat(0x5f6b34, { rough: 0.9 })
+        mat(0x5f8a3c, { rough: 0.9 })
       );
       m.position.y = 0.08;
       return m;
@@ -253,6 +270,31 @@
       );
       g.position.set(0, -0.25, z);
       g.receiveShadow = true;
+      return g;
+    }
+    // a flat strip of dashed ochre lane paint laid on top of a road tile —
+    // the unmistakable "centre line" cue that this lane is a busy road.
+    function roadDashes(z){
+      const g = new THREE.Group();
+      const dashGeo = new THREE.BoxGeometry(0.42, 0.04, 0.1);
+      const dashMat = mat(COL.lane, { rough: 0.8 });
+      for (let x = -HALF - 2; x <= HALF + 2; x += 1.1){
+        const d = new THREE.Mesh(dashGeo, dashMat);
+        d.position.set(x, 0.01, z);
+        g.add(d);
+      }
+      return g;
+    }
+    // pale ripple caps floating on a water row so the blue reads as moving river.
+    function waterRipples(z){
+      const g = new THREE.Group();
+      const rGeo = new THREE.BoxGeometry(0.5, 0.03, 0.16);
+      const rMat = mat(COL.foam, { rough: 0.85 });
+      for (let i = 0; i < 5; i++){
+        const r = new THREE.Mesh(rGeo, rMat);
+        r.position.set(srange(-HALF - 1, HALF + 1), 0.01, z + srange(-0.32, 0.32));
+        g.add(r);
+      }
       return g;
     }
 
@@ -294,6 +336,7 @@
           if (occupied.size >= COLS){ occupied.clear(); }
         } else if (type === 'road'){
           grp.add(tileRow(z, idx % 2 ? COL.road : COL.road2));
+          grp.add(roadDashes(z));
           dir = schance(0.5) ? 1 : -1;
           speed = srange(0.022, 0.05) + diff * 0.02;
           gap = srange(3.2, 5.2) - diff * 0.6;
@@ -308,6 +351,7 @@
           }
         } else { // water
           grp.add(tileRow(z, idx % 2 ? COL.water : COL.water2));
+          grp.add(waterRipples(z));
           dir = schance(0.5) ? 1 : -1;
           speed = srange(0.018, 0.04) + diff * 0.014;
           gap = srange(3.0, 4.6);

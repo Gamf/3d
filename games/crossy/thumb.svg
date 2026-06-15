@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <!-- cream sky / ground stock -->
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <!-- safe grass strip (bottom) -->
+  <rect x="0" y="150" width="320" height="50" fill="#6f6a3b"/>
+  <!-- dark asphalt road lane -->
+  <rect x="0" y="96" width="320" height="54" fill="#221f17"/>
+  <!-- dashed ochre lane line -->
+  <rect x="14" y="121" width="26" height="6" fill="#c8923a"/>
+  <rect x="58" y="121" width="26" height="6" fill="#c8923a"/>
+  <rect x="102" y="121" width="26" height="6" fill="#c8923a"/>
+  <rect x="146" y="121" width="26" height="6" fill="#c8923a"/>
+  <rect x="190" y="121" width="26" height="6" fill="#c8923a"/>
+  <rect x="234" y="121" width="26" height="6" fill="#c8923a"/>
+  <rect x="278" y="121" width="26" height="6" fill="#c8923a"/>
+  <!-- an oxblood car on the road -->
+  <rect x="210" y="104" width="62" height="30" rx="4" fill="#9b3a22"/>
+  <rect x="222" y="98" width="34" height="14" rx="3" fill="#9b3a22"/>
+  <rect x="226" y="100" width="26" height="9" fill="#221f17"/>
+  <circle cx="224" cy="136" r="6" fill="#221f17"/>
+  <circle cx="262" cy="136" r="6" fill="#221f17"/>
+  <!-- blue river (top) -->
+  <rect x="0" y="42" width="320" height="54" fill="#3f78a8"/>
+  <!-- pale ripple caps -->
+  <rect x="24" y="58" width="30" height="5" rx="2" fill="#9fc3df"/>
+  <rect x="200" y="76" width="34" height="5" rx="2" fill="#9fc3df"/>
+  <rect x="120" y="50" width="26" height="5" rx="2" fill="#9fc3df"/>
+  <!-- floating log -->
+  <rect x="100" y="58" width="120" height="22" rx="6" fill="#6e4a2c"/>
+  <rect x="100" y="58" width="120" height="7" rx="3" fill="#86592f"/>
+  <!-- the frog hero, mid-hop on the road -->
+  <g>
+    <!-- body -->
+    <rect x="124" y="120" width="58" height="34" rx="9" fill="#7aa23e"/>
+    <!-- pale belly -->
+    <rect x="136" y="142" width="34" height="12" rx="5" fill="#efe6d2"/>
+    <!-- front feet -->
+    <rect x="122" y="148" width="16" height="9" rx="3" fill="#6f6a3b"/>
+    <rect x="168" y="148" width="16" height="9" rx="3" fill="#6f6a3b"/>
+    <!-- eye bumps -->
+    <circle cx="136" cy="118" r="11" fill="#7aa23e"/>
+    <circle cx="170" cy="118" r="11" fill="#7aa23e"/>
+    <circle cx="138" cy="116" r="5" fill="#221f17"/>
+    <circle cx="172" cy="116" r="5" fill="#221f17"/>
+  </g>
+</svg>

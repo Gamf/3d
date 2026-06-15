@@ -117,7 +117,10 @@
     const C_HOLE   = 0x2a2018;  // deep brown hole pit
     const C_HOLERING = 0x9b3a22;// oxblood hole ring (warning)
     const C_GOAL   = 0x9b3a22;  // oxblood goal pad
-    const C_BALL   = 0xefe6d2;  // cream marble
+    // Steel ball — THE signature of the classic wooden tilt-maze (Labyrinth).
+    // A light neutral grey read as polished steel (matte, not a mirror), so the
+    // marble is instantly recognisable as the rolling ball-bearing of the original.
+    const C_BALL   = 0xcfd2d6;  // brushed-steel marble
     const ACCENT   = C_RIM;     // accent used by sparks / flash
     // convert grid (col,row) -> world (x,z). center cell of grid is origin.
     function gx(c){ return (c - (N - 1) / 2) * CELL; }
@@ -170,13 +173,24 @@
     const board = new THREE.Group();
     scene.add(board);
 
-    // floor — a plain solid warm-brown matte board. A faint warmer grid is
-    // baked in just to read cell edges; no neon lines, no glow.
+    // floor — a warm-brown WOODEN board, the recognisable surface of the classic
+    // tabletop tilt-maze (Labyrinth). Long horizontal wood-grain streaks evoke
+    // planking; a faint warmer grid still reads the maze cell edges. All matte,
+    // no neon lines, no glow.
     const floorTex = (() => {
       const c = document.createElement('canvas'); c.width = 256; c.height = 256;
       const ctx = c.getContext('2d');
       ctx.fillStyle = '#4a3b2a'; ctx.fillRect(0, 0, 256, 256);
-      ctx.strokeStyle = 'rgba(111,106,59,0.30)'; ctx.lineWidth = 2;
+      // wood-grain streaks: gentle horizontal bands in warmer/cooler browns
+      for (let y = 0; y < 256; y += 3){
+        const v = Math.sin(y * 0.21) * 0.5 + Math.sin(y * 0.07 + 1.3) * 0.5;
+        const shade = 0.10 + v * 0.06; // small tonal wobble around the base brown
+        ctx.strokeStyle = 'rgba(' + (shade > 0 ? '120,96,64,' : '40,30,18,') + Math.abs(shade).toFixed(3) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(256, y + 0.5); ctx.stroke();
+      }
+      // maze cell grid (subtle warmer lines)
+      ctx.strokeStyle = 'rgba(111,106,59,0.26)'; ctx.lineWidth = 2;
       const step = 256 / N;
       for (let i = 0; i <= N; i++){
         const p = Math.round(i * step) + 0.5;
@@ -272,7 +286,9 @@
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(BALL_R, 28, 28),
       new THREE.MeshStandardMaterial({
-        color: C_BALL, roughness: 0.35, metalness: 0.15
+        // polished-steel ball-bearing: high metalness + low roughness so the warm
+        // key light gives it a clean specular sheen (matte scene, shiny marble).
+        color: C_BALL, roughness: 0.22, metalness: 0.85
       })
     );
     ball.castShadow = true;

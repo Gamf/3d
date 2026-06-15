@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <!-- ground / sky -->
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <!-- central world the ship orbits -->
+  <circle cx="160" cy="104" r="34" fill="#6f6a3b"/>
+  <circle cx="150" cy="94" r="9" fill="#efe6d2" opacity="0.55"/>
+  <circle cx="172" cy="116" r="6" fill="#efe6d2" opacity="0.45"/>
+  <!-- faint orbit ring guide -->
+  <ellipse cx="160" cy="104" rx="118" ry="58" fill="none" stroke="#221f17" stroke-width="2" opacity="0.25"/>
+  <!-- player ship: triangular vector wedge on the orbit, with thrust flame -->
+  <polygon points="58,104 32,92 40,104 32,116" fill="#c8923a"/>
+  <polygon points="40,104 24,98 24,110" fill="#9b3a22"/>
+  <!-- incoming asteroids: jagged rock polygons -->
+  <polygon points="246,52 262,46 274,58 270,74 254,78 242,66" fill="#9b3a22"/>
+  <polygon points="276,128 290,124 300,136 294,150 280,150 272,138" fill="#9b3a22"/>
+  <polygon points="118,166 132,162 142,172 136,184 122,184 114,174" fill="#9b3a22"/>
+  <!-- danger wedge where a rock will cross the orbit -->
+  <polygon points="222,128 250,138 232,156" fill="#221f17" opacity="0.35"/>
+</svg>

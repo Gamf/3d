@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#3a2c20">
+  <meta name="theme-color" content="#0a0a12">
   <title>Orbit Dodge — Gamf</title>
   <meta name="description" content="Your ship circles a glowing planet while asteroids rain in from deep space. Drag to swing the ship around the orbit and stay clear of every incoming rock. Survival time is your score.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -119,14 +119,17 @@
     bestEl.textContent = best;
 
     // ---------------------------------------------------------------- palette
-    // GAMF Quarterly — warm 1970s print catalogue. Warm dusk scene; earthy
-    // matte objects; no neon, no glow, no gradients.
-    const C_BG    = 0x3a2c20;   // warm dusk brown — solid scene.background
-    const C_RED   = 0x9b3a22;   // oxblood — asteroids / danger
-    const C_AMBER = 0xc8923a;   // ochre — planet warmth / warnings
-    const C_SHIP  = 0xa4623a;   // clay — the player ship
-    const C_OLIVE = 0x6f6a3b;   // olive — orbit ring guide
-    const C_BONE  = 0xefe6d2;   // cream — warm sunlight
+    // Recreating the recognisable look of Atari ASTEROIDS (1979): the iconic
+    // black space void with crisp white vector shapes — a wireframe triangular
+    // ship and chunky pale rock polygons. Done matte (no neon, no glow, no
+    // gradients) so it stays calm and tasteful. Danger cues keep the oxblood
+    // identity from the warm Gamf palette.
+    const C_BG    = 0x0a0a12;   // deep space void — near-black, faint blue cast
+    const C_RED   = 0x9b3a22;   // oxblood — danger wedge / impact
+    const C_AMBER = 0xc8923a;   // ochre — engine spark / planet warmth
+    const C_SHIP  = 0xf3ece0;   // bone-white — the vector ship
+    const C_OLIVE = 0x5a6470;   // cool slate — faint orbit ring guide
+    const C_BONE  = 0xefe6d2;   // cream — pale starlight / rock fill
 
     // ---------------------------------------------------------------- geometry config
     const PLANET_R   = 4.2;     // radius of the planet
@@ -138,13 +141,34 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.18;
+    renderer.toneMappingExposure = 1.05;
     document.body.appendChild(renderer.domElement);
 
     // ---------------------------------------------------------------- scene + fog
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(C_BG);
-    scene.fog = new THREE.Fog(C_BG, 26, 64);
+    scene.fog = new THREE.Fog(C_BG, 30, 70);
+
+    // ---------------------------------------------------------------- starfield
+    // A calm, static scatter of faint star points fixed behind the action — the
+    // signature Asteroids "deep space void". Flat matte points, no glow/twinkle.
+    (() => {
+      const N = 220, pos = new Float32Array(N * 3);
+      for (let i = 0; i < N; i++){
+        // scatter on a far shell behind the play area
+        const th = srange(0, Math.PI * 2), ph = Math.acos(srange(-1, 1)), r = srange(55, 78);
+        pos[i*3]   = r * Math.sin(ph) * Math.cos(th);
+        pos[i*3+1] = r * Math.cos(ph) * 0.6 - 6;   // bias below/around the scene
+        pos[i*3+2] = r * Math.sin(ph) * Math.sin(th);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const stars = new THREE.Points(g, new THREE.PointsMaterial({
+        color: 0xbfc4cf, size: 0.5, sizeAttenuation: true,
+        transparent: true, opacity: 0.7, fog: false
+      }));
+      scene.add(stars);
+    })();
 
     // The whole orbital plane is tilted so it reads as 3D, not a flat top-down disc.
     const TILT = 0.62;          // radians the orbit plane leans toward the camera
@@ -171,12 +195,14 @@
     scene.add(field);
 
     // ---------------------------------------------------------------- planet
+    // A quiet, distant world at the orbit's centre. Kept dark and matte so it
+    // sits behind the action and lets the white Asteroids ship + rocks read.
     const planetTex = (() => {
       const c = document.createElement('canvas'); c.width = 256; c.height = 128;
       const ctx = c.getContext('2d');
-      ctx.fillStyle = '#7a5232'; ctx.fillRect(0, 0, 256, 128);
-      // soft earthy continents — olive + ochre + clay, flat matte ink (no glow)
-      const blobs = ['rgba(111,106,59,0.55)', 'rgba(200,146,58,0.40)', 'rgba(74,59,42,0.45)'];
+      ctx.fillStyle = '#1d2230'; ctx.fillRect(0, 0, 256, 128);
+      // faint cratered relief — cool slate blots, flat matte (no glow)
+      const blobs = ['rgba(45,53,70,0.6)', 'rgba(90,100,112,0.30)', 'rgba(16,18,26,0.5)'];
       for (let i = 0; i < 46; i++){
         const x = sint(256), y = sint(128), rr = srange(6, 22);
         ctx.fillStyle = blobs[sint(blobs.length)];
@@ -189,8 +215,8 @@
     const planet = new THREE.Mesh(
       new THREE.SphereGeometry(PLANET_R, 40, 28),
       new THREE.MeshStandardMaterial({
-        map: planetTex, color: 0xb98a55,
-        roughness: 0.95, metalness: 0.0
+        map: planetTex, color: 0x6b7488,
+        roughness: 1.0, metalness: 0.0
       })
     );
     field.add(planet);
@@ -213,22 +239,32 @@
     ship.position.set(ORBIT_R, 0, 0);
     shipPivot.add(ship);
 
+    // The Asteroids ship: a slim white vector triangle. A narrow 3-sided cone
+    // gives the wedge silhouette; a white edge overlay reads as the wireframe
+    // outline of the original (flat matte, no glow).
+    const shipGeo = new THREE.ConeGeometry(0.46, 1.7, 3);
     const shipBody = new THREE.Mesh(
-      new THREE.ConeGeometry(0.5, 1.5, 4),
+      shipGeo,
       new THREE.MeshStandardMaterial({
-        // honest matte clay — lit by the warm rig, no emissive glow
-        color: C_SHIP, roughness: 0.7, metalness: 0.05, flatShading: true
+        // honest matte bone — lit by the rig, no emissive glow
+        color: C_SHIP, roughness: 0.65, metalness: 0.0, flatShading: true
       })
     );
     // cone default points +y; rotate so the nose leads the orbit (tangent, +z local)
     shipBody.rotation.x = Math.PI / 2;
     ship.add(shipBody);
-    // cream nose band — a small matte ring marking the ship's heading (no glow)
-    const shipHalo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.5, 0.06, 8, 18),
-      new THREE.MeshStandardMaterial({ color: C_BONE, roughness: 0.8, metalness: 0.0 })
+    // crisp white vector outline — the recognisable wireframe edge of the ship
+    const shipWire = new THREE.LineSegments(
+      new THREE.EdgesGeometry(shipGeo),
+      new THREE.LineBasicMaterial({ color: 0xffffff })
     );
-    shipHalo.position.set(0, 0, 0.2);
+    shipWire.rotation.x = Math.PI / 2;
+    ship.add(shipWire);
+    // small tail fins — the notched stern of the classic vector ship (matte)
+    const finGeo = new THREE.BoxGeometry(0.7, 0.07, 0.42);
+    const finMat = new THREE.MeshStandardMaterial({ color: C_SHIP, roughness: 0.65, metalness: 0.0, flatShading: true });
+    const shipHalo = new THREE.Mesh(finGeo, finMat);   // kept name `shipHalo` for the idle-spin hook below
+    shipHalo.position.set(0, 0, -0.6);
     ship.add(shipHalo);
     // little matte engine trail spark (subtle gameplay feedback, not a glow)
     const trail = new THREE.Mesh(
@@ -241,15 +277,23 @@
     // ---------------------------------------------------------------- asteroid pool
     // Each asteroid flies straight in from far out toward the planet centre. It
     // crosses the orbit radius at a known angle; the ship must not be there then.
+    // Chunky pale rock polygons — the signature Asteroids boulder. A faceted
+    // low-poly lump in matte bone, wrapped in a crisp white vector outline so it
+    // reads as the wireframe rock of the original (flat matte, no glow).
     const rockGeo = new THREE.IcosahedronGeometry(0.62, 0);
+    const rockEdgeGeo = new THREE.EdgesGeometry(rockGeo);
     const ASTEROID_POOL = 24;
     const asteroids = [];
     for (let i = 0; i < ASTEROID_POOL; i++){
       const mat = new THREE.MeshStandardMaterial({
-        // matte oxblood rock — lit by the rig, no emissive glow
-        color: C_RED, roughness: 0.85, metalness: 0.05, flatShading: true
+        // matte pale stone — lit by the rig, no emissive glow
+        color: C_BONE, roughness: 1.0, metalness: 0.0, flatShading: true
       });
       const mesh = new THREE.Mesh(rockGeo, mat);
+      // white vector outline tracks the rock so the wireframe edge always shows
+      const wire = new THREE.LineSegments(rockEdgeGeo,
+        new THREE.LineBasicMaterial({ color: 0xffffff }));
+      mesh.add(wire);
       mesh.visible = false;
       field.add(mesh);
       asteroids.push({
@@ -528,10 +572,9 @@
         }
       }
 
-      // ship idle motion (always — looks alive on the attract screen too)
-      shipHalo.rotation.z += 0.04;
-      // gentle engine pulse — a small scale wobble on the trail spark (no glow)
-      trail.scale.setScalar(0.85 + 0.25 * (0.5 + 0.5 * Math.sin(t * 0.5)));
+      // engine pulse — the classic Asteroids thrust flame flickering off the
+      // stern. A small scale wobble on the spark (flat matte, no glow).
+      trail.scale.setScalar(0.85 + 0.35 * (0.5 + 0.5 * Math.sin(t * 0.5)));
 
       // particles
       for (let i = sparks.length - 1; i >= 0; i--){

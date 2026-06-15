@@ -149,10 +149,13 @@
     key.shadow.camera.top = 14; key.shadow.camera.bottom = -30;
     scene.add(key);
 
-    // ---------------------------------------------------------------- floor (plain solid warm ground)
-    // A plain solid warm ground plane — no grid lines.
+    // ---------------------------------------------------------------- floor (vast flat field)
+    // Cubefield is a single huge flat plane running to the horizon, not a narrow
+    // track. We widen the visible ground far past the rails so it reads as that
+    // endless field — gameplay still happens in the 3 lanes between the rails.
+    // A plain solid warm ground plane, no grid lines.
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(TRACK_HALF * 2, 360),
+      new THREE.PlaneGeometry(280, 360),
       new THREE.MeshStandardMaterial({
         color: C_GROUND, roughness: 0.95, metalness: 0.0
       })
@@ -161,6 +164,17 @@
     floor.position.set(0, 0, SPAWN_Z / 2 + 10);
     floor.receiveShadow = true;
     scene.add(floor);
+
+    // bright warm HORIZON BAND — Cubefield's signature is the glowing strip where
+    // the flat plane meets the sky. Done matte (no gradient, no bloom): a slim
+    // upright ochre band parked at the far edge of the field, kept just inside
+    // the fog far-plane so it reads as a warm horizon line rather than a wall.
+    const horizon = new THREE.Mesh(
+      new THREE.PlaneGeometry(280, 7),
+      new THREE.MeshBasicMaterial({ color: 0xd8a657, fog: true })
+    );
+    horizon.position.set(0, 2.6, SPAWN_Z - 14);
+    scene.add(horizon);
 
     // matte olive side rails (no glow)
     const railGeo = new THREE.BoxGeometry(0.18, 0.5, 360);
@@ -174,21 +188,30 @@
       scene.add(rail);
     }
 
-    // ---------------------------------------------------------------- player cube
-    // Honest matte oxblood cube — no emissive glow, no bloom halo.
-    const player = new THREE.Mesh(
-      new THREE.BoxGeometry(1.1, 1.1, 1.1),
-      new THREE.MeshStandardMaterial({
-        color: C_PLAYER, roughness: 0.7, metalness: 0.0
-      })
-    );
-    player.castShadow = true;
-    player.position.set(0, 0.7, PLAYER_Z);
+    // ---------------------------------------------------------------- player ship
+    // Cubefield's hero is a small low ARROW/WEDGE skimming the plane and pointing
+    // down-field, not a tall block. Build that signature forward-pointing wedge
+    // from a 4-sided cone (a flat pyramid) laid on its side, tip toward -Z.
+    // Honest matte oxblood — no emissive glow, no bloom halo.
+    const playerMat = new THREE.MeshStandardMaterial({
+      color: C_PLAYER, roughness: 0.7, metalness: 0.0
+    });
+    const player = new THREE.Group();
+    const ship = new THREE.Mesh(new THREE.ConeGeometry(0.78, 1.7, 4), playerMat);
+    ship.rotation.x = -Math.PI / 2;   // lay flat, tip pointing down-field (-Z)
+    ship.rotation.y = Math.PI / 4;    // square the 4 facets to the field
+    ship.scale.set(1, 1, 0.42);       // flatten vertically into a sleek wedge
+    ship.castShadow = true;
+    player.add(ship);
+    player.position.set(0, 0.42, PLAYER_Z);
     scene.add(player);
 
     // ---------------------------------------------------------------- obstacles (pooled)
-    // Warm earthy obstacle palette — brick, ochre, olive, clay. Honest matte
-    // colours, no emissive glow.
+    // Cubefield's iconic hazard is the upright CUBE resting flat on the plane —
+    // a whole field of them rushing the player. We keep them axis-aligned and
+    // sitting on the ground (no mid-air tumbling) so the scene reads instantly
+    // as that classic field of cubes. Warm earthy palette — brick, ochre, olive,
+    // clay. Honest matte colours, no emissive glow.
     const OBST_COLORS = [0x9b3a22, 0xc8923a, 0x6f6a3b, 0xa4623a];
     const obstGeo = new THREE.BoxGeometry(1.7, 1.7, 1.7);
     function makeObstMat(hex){
@@ -252,7 +275,7 @@
       speed = 0.42; dist = 0; score = 0; level = 1; gameTime = 0;
       over = false; paused = false; started = true;
       spawnTimer = 0;
-      player.position.set(LANES[lane], 0.7, PLAYER_Z);
+      player.position.set(LANES[lane], 0.42, PLAYER_Z);
       player.rotation.set(0, 0, 0);
       freeAll();
       setPill();
@@ -326,8 +349,10 @@
         o.active = true; o.lane = l;
         o.mesh.visible = true;
         o.mesh.material = spick(OBST_MATS);
-        o.mesh.position.set(LANES[l], 0.9, SPAWN_Z);
-        o.mesh.rotation.set(srange(0, 6.28), srange(0, 6.28), 0);
+        // sit the cube flat on the plane, axis-aligned (Cubefield signature) —
+        // a touch of yaw variety keeps the field from looking machine-perfect.
+        o.mesh.position.set(LANES[l], 0.85, SPAWN_Z);
+        o.mesh.rotation.set(0, srange(-0.18, 0.18), 0);
       }
       // sometimes drop a bonus orb in a free lane
       if (srnd() < 0.45){
@@ -420,18 +445,19 @@
         const spawnGap = Math.max(7.5, 16 - level * 0.8);
         if (spawnTimer <= 0){ spawnRow(); spawnTimer = spawnGap; }
 
-        // smooth lane glide + a little tilt/squash for juice
+        // smooth lane glide + a little banking tilt for juice (the wedge leans
+        // into the lane change like a craft skimming the field)
         player.position.x += (targetX - player.position.x) * 0.28;
         const tilt = (targetX - player.position.x) * 0.5;
         player.rotation.z = tilt;
         player.rotation.x = Math.sin(t * 0.18) * 0.05;
-        player.position.y = 0.7 + Math.abs(Math.sin(t * 0.16)) * 0.06;
+        player.position.y = 0.42 + Math.abs(Math.sin(t * 0.16)) * 0.05;
 
         // move obstacles toward the camera
         for (const o of obstacles){
           if (!o.active) continue;
           o.mesh.position.z += speed;
-          o.mesh.rotation.x += 0.02; o.mesh.rotation.y += 0.015;
+          // no tumble — Cubefield cubes stay upright, planted on the plane
           // collision when near player z
           if (hits(player.position.x, PLAYER_Z, o.mesh.position.x, o.mesh.position.z, 1.3, 1.3)){
             end();

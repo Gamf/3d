@@ -98,9 +98,19 @@
     let paused=false;
     let chips=[];                                // falling sliced-off pieces
 
-    // warm earthy catalogue palette — matte, no neon
-    const PALETTE=[0x9b3a22,0xc8923a,0x6f6a3b,0xa4623a,0xefe6d2,0x4a3b2a];
-    function colorFor(i){ return new THREE.Color(PALETTE[((i%PALETTE.length)+PALETTE.length)%PALETTE.length]); }
+    // The original "Stack" signature is a smooth hue shift sweeping UP the tower —
+    // each layer a touch different from the last, so the whole stack reads as one
+    // continuous gradient ribbon. We keep it in the warm catalogue range (oxblood →
+    // ochre → olive and back) instead of neon, and cycle slowly so a tall tower
+    // banding looks deliberate and calm rather than rainbow-bright.
+    function colorFor(i){
+      const c=new THREE.Color();
+      // hue sweeps a warm arc: ~12° (oxblood/red) → ~95° (olive) and back, slowly.
+      const t=(Math.sin(i*0.14)*0.5+0.5);            // 0..1 ping-pong up the tower
+      const hue=(12+ t*83)/360;                        // warm red → ochre → olive
+      c.setHSL(hue, 0.42, 0.46);                       // muted, matte, no neon
+      return c;
+    }
     function makeMat(i){ const c=colorFor(i);
       return new THREE.MeshStandardMaterial({color:c,roughness:0.85,metalness:0.0}); }
     function addLayer(x,z,w,d,i){ const g=new THREE.BoxGeometry(w,H,d);

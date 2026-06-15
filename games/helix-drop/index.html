@@ -127,9 +127,16 @@
     const RING_R=3.2;          // disc radius
     const SEG=8;               // segments per ring
     const tower=new THREE.Group(); scene.add(tower); // rotates as a whole
-    // Safe = warm ochre, danger = oxblood/brick. Honest matte clay, no glow.
-    const SAFE=0xc8923a, DANGER=0x9b3a22;
-    const safeMat=new THREE.MeshStandardMaterial({color:SAFE,roughness:0.8,metalness:0.0});
+    // Helix-Jump signature: a stack of solid-colour platform discs running down a
+    // central column, each ring a flat matte colour, with the deadly wedges picked
+    // out in a single contrasting red so they read instantly. We keep the warm
+    // editorial palette: each platform cycles through a small set of matte clay
+    // tones (ochre / olive / clay-rose / sand) so the tower reads as the familiar
+    // banded helix without any neon. Danger = oxblood, the one "hot" colour.
+    const SAFE=0xc8923a, DANGER=0x9b3a22;     // primary spark/score colours
+    // Per-ring platform tones — cycled by ring index for the banded-tower look.
+    const RING_TONES=[0xc8923a,0x6f6a3b,0xb6603f,0xd8b46a,0x8a7f4a,0xa84a30];
+    const safeMats=RING_TONES.map(c=>new THREE.MeshStandardMaterial({color:c,roughness:0.82,metalness:0.0}));
     const dangerMat=new THREE.MeshStandardMaterial({color:DANGER,roughness:0.7,metalness:0.0});
 
     const SURF=0.75;   // ball-center rest height above a ring's y (disc top 0.25 + ball r 0.5)
@@ -144,6 +151,9 @@
       const dangerChance=safeStart?0:Math.min(0.42,0.06+index*0.011);
       const gapSet=new Set();
       for(let g=0;g<gapCount;g++) gapSet.add((gapStart+g)%SEG);
+      // This whole platform's "safe" colour — one matte tone per ring so the tower
+      // reads as the banded helix stack of the original.
+      const safeMat=safeMats[index%safeMats.length];
       for(let s=0;s<SEG;s++){
         if(gapSet.has(s)) continue; // gap = nothing
         const a0=(s/SEG)*Math.PI*2, a1=((s+1)/SEG)*Math.PI*2;
