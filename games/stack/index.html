@@ -210,10 +210,14 @@
       renderer.render(scene,camera); requestAnimationFrame(animate);
     }
     // ---- on-screen action buttons (shared helper) ----
-    // Block moves automatically (no drag/keyboard movement), so no D-pad — just the
-    // single discrete action: Drop. Wired to the same drop() the keyboard/Space uses.
+    // One-button timing game: the block slides on its own, so there is no movement
+    // to control and no D-pad. The whole game is a single discrete tap — Drop — at
+    // the right moment. So: one big primary button, bottom-right thumb zone, wired to
+    // the same drop() Space/Enter use. hold:false — Drop is a precise per-block tap,
+    // never auto-repeated. Pause/Restart stay off the thumb cluster (keyboard + the
+    // game-over screen handle them) so a novice can't fat-finger them reaching for Drop.
     window.gamfControls({
-      actions:[ { label:'Drop', press:drop } ]
+      actions:[ { label:'Drop', press:drop, hold:false } ]
     });
 
     reset(); animate();

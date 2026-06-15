@@ -300,13 +300,14 @@
       if(k===' '||k==='Enter'||k==='ArrowUp'||k==='w'||k==='W'){ hop(); return; }
     });
     // ---------- on-screen action buttons (shared helper) ----------
-    // No drag-aim / movement in this game — the single discrete action is the hop.
-    // Expose it (plus pause/restart) as on-screen buttons; same fns as the keyboard.
+    // ONE-BUTTON game: the only gameplay action is the hop. No D-pad, no aim.
+    // Give a single big PRIMARY Hop button (helper centers it in the bottom-right
+    // thumb zone) — same fn as Space. Pause/Restart stay OFF the thumb cluster
+    // (they're on the keyboard + the game-over screen) so a novice can't wipe their
+    // run or pause by accident while tapping to hop.
     window.gamfControls({
       actions:[
-        { label:'Restart', press:()=>{ if(!helpOpen()) reset(); } },
-        { label:'Pause',   press:()=>{ if(!helpOpen()) togglePause(); } },
-        { label:'Hop',     press:()=>{ if(!helpOpen()) hop(); } },
+        { label:'Hop', press:()=>{ if(!helpOpen()) hop(); } },
       ],
     });
 

@@ -577,17 +577,22 @@
     }
 
     // ---------------------------------------------------------------- on-screen buttons
-    // Drag still handles continuous look/steer (rotate around the wall). Every
-    // DISCRETE action is an on-screen button wired to the SAME function the
-    // keyboard uses — no tap-anywhere-to-act. Left/Right step-rotate (same as
-    // the arrow keys via nudge); hold:true auto-repeats for smooth steering.
+    // This is a LEFT/RIGHT-only steering game: all you ever do while diving is
+    // rotate the ship around the wall to line up with the next gap. So the
+    // bottom-LEFT thumb zone is a two-button D-pad (◀ ▶) and nothing else —
+    // hold:true auto-repeats so a novice can just HOLD a side to keep rotating
+    // smoothly toward the gap instead of tapping. Drag still works for steering.
+    //
+    // The only DISCRETE action is "start / resume the dive", so the bottom-RIGHT
+    // zone has a SINGLE big primary button (Dive) wired to the same primaryAction
+    // the keyboard/attract-tap use. Pause and Restart are intentionally NOT in
+    // the thumb cluster — a novice reaching to start should never accidentally
+    // pause or restart; both stay on the keyboard (P / R) and the game-over card.
     window.gamfControls({
       move: { left: () => nudge(1), right: () => nudge(-1) },
       hold: true,
       actions: [
-        { label: 'Dive',    press: primaryAction },
-        { label: 'Pause',   press: togglePause },
-        { label: 'Restart', press: reset },
+        { label: 'Dive', press: primaryAction },
       ],
     });
 

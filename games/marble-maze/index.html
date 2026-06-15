@@ -732,12 +732,30 @@
     helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
 
     // ---------------------------------------------------------------- on-screen buttons
-    // Drag tilts the board (movement/aim). Discrete actions are buttons — wired to
-    // the SAME functions the keyboard uses (P = pause, R = restart). Keyboard still works.
+    // Movement is CONTINUOUS here: hold a direction and the board stays tilted so the
+    // marble keeps rolling — exactly like holding an arrow key. So we give a real 4-way
+    // D-pad in the bottom-LEFT thumb zone with hold:true (auto-repeat). Each press feeds
+    // the SAME `keys[]` flags the keyboard sets, which keyTilt() already turns into a
+    // held tilt every frame. The D-pad buttons give no release event, so each held flag
+    // auto-expires just after the 110ms repeat interval — while you keep holding, every
+    // repeat refreshes it (board stays tilted); when you let go the repeats stop, the
+    // flag lapses and keyTilt() relaxes the board flat. A novice can just hold a corner.
+    const padHold = Object.create(null); // dir -> expiry timeout id
+    function holdDir(dirKey){
+      keys[dirKey] = true;
+      clearTimeout(padHold[dirKey]);
+      padHold[dirKey] = setTimeout(() => { keys[dirKey] = false; }, 150); // > 110ms repeat
+    }
     window.gamfControls({
+      move: {
+        up:    () => holdDir('arrowup'),
+        down:  () => holdDir('arrowdown'),
+        left:  () => holdDir('arrowleft'),
+        right: () => holdDir('arrowright'),
+      },
+      hold: true,                                   // keep tilting while a D-pad button is held
       actions: [
-        { label: 'Pause', press: togglePause },   // same as 'P'
-        { label: 'Restart', press: newGame },     // same as 'R'
+        { label: 'Pause', press: togglePause },     // single small secondary; same as 'P'. Restart is on R + game-over.
       ],
     });
 

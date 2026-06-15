@@ -516,10 +516,20 @@
     });
 
     // ---------------------------------------------------------------- on-screen controls
-    // This game has NO drag-aim — every action is discrete (a hop in one of four
-    // directions, plus pause/restart). So we expose a move D-pad + action buttons,
-    // each wired to the SAME functions the keyboard uses. Hops are step-based, so
-    // no auto-repeat (hold:false). Keyboard + swipe keep working alongside these.
+    // Two-handed thumb layout. The one thing a player does constantly is hop
+    // FORWARD, so that's the big round PRIMARY button under the right thumb
+    // (bottom-right) — the obvious target a novice mashes over and over. The left
+    // thumb handles the occasional sideways dodge or back-up on the D-pad
+    // (bottom-left). Forward is on the D-pad too (up arrow) for parity with swipe
+    // and keyboard. Hops are discrete STEPS, so NO auto-repeat (hold:false): one
+    // press = one hop, exactly like a tap — a held button must not stutter you
+    // forward into traffic.
+    //
+    // The right cluster is GAMEPLAY ONLY: a single big Hop button, nothing else.
+    // Pause and Restart are kept OUT of the thumb zones entirely so a novice can
+    // never freeze the game or end a run while reaching for Hop — Pause is on the
+    // keyboard (P), Restart on the keyboard (R) and the game-over "Play again"
+    // button. Every button calls the SAME functions the keyboard uses.
     window.gamfControls({
       move: {
         up:    () => tryHop(0, 1),
@@ -529,8 +539,7 @@
       },
       hold: false,
       actions: [
-        { label: 'Pause',   press: togglePause },
-        { label: 'Restart', press: restart }
+        { label: 'Hop', press: () => tryHop(0, 1) }
       ]
     });
 

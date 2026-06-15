@@ -488,19 +488,22 @@
     helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
 
     // ---------------------------------------------------------------- on-screen controls
-    // Drag / swipe still steers (look/aim-style lane movement). The D-pad mirrors
-    // the keyboard lane switch; the action buttons mirror the discrete keys
-    // (P pause / resume, R restart). Same functions the keyboard calls.
+    // This is a pure left/right lane-switcher: steering IS the whole game, and
+    // there is no gameplay "action" to fire. So we give the novice ONLY a
+    // left/right D-pad in the bottom-left thumb zone (no up/down). hold:true so
+    // holding ◀ / ▶ slides the cube across lanes to the far edge instead of
+    // demanding precise single taps. Drag / swipe on the canvas still steers too.
+    //
+    // Pause and Restart are deliberately NOT in the right thumb cluster: a novice
+    // reaching down there would freeze their run on the big primary button by
+    // accident. Both live on the keyboard (P / R) and on the game-over screen
+    // (Play again), so nothing useful is lost.
     window.gamfControls({
       move: {
         left:  () => moveLane(-1),   // same as ArrowLeft / A
         right: () => moveLane(1),    // same as ArrowRight / D
       },
-      hold: true,                    // continuous lane change while held
-      actions: [
-        { label: 'Pause',   press: togglePause },   // same as P
-        { label: 'Restart', press: reset },         // same as R
-      ],
+      hold: true,                    // hold ◀/▶ to glide across lanes
     });
 
     reset(); animate();

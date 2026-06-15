@@ -576,19 +576,22 @@
     }
 
     // ---------------------------------------------------------------- on-screen controls
-    // Drag still swings the ship around the orbit (look/aim/movement). Every discrete
-    // action is an on-screen button wired to the same functions the keyboard uses:
-    //  • ◀ / ▶ nudge the ship one step around the orbit (keyboard arrows / A D)
-    //  • Launch — begin / resume / play again (keyboard space / enter)
-    //  • Pause  — pause / resume (keyboard P)
-    //  • Restart — restart the run (keyboard R)
+    // Movement is left/right ONLY — the ship swings around a ring — so it lives in the
+    // bottom-LEFT D-pad with just ◀ / ▶ and hold:true: a novice HOLDS a side to keep
+    // swinging the ship around the orbit (each repeat nudges it; held, it glides round).
+    // Drag still swings the ship too, for players who'd rather flick.
+    // The bottom-RIGHT cluster is the one big GAMEPLAY action: Launch — start the run,
+    // resume from pause, or play again (keyboard space / enter; same function).
+    // Pause (keyboard P) and Restart (keyboard R + the game-over screen) are kept OUT of
+    // the thumb cluster so a novice can't hit them while reaching to swing the ship.
     window.gamfControls({
+      move: {
+        left:  () => nudge(1),    // swing one step toward the top of the orbit
+        right: () => nudge(-1)    // swing one step the other way
+      },
+      hold: true,                 // hold a side to keep swinging around the orbit
       actions: [
-        { label: '◀',       press: () => nudge(1)      },
-        { label: '▶',       press: () => nudge(-1)     },
-        { label: 'Launch',  press: primaryAction       },
-        { label: 'Pause',   press: togglePause         },
-        { label: 'Restart', press: reset               }
+        { label: 'Launch', press: primaryAction }
       ]
     });
 

@@ -340,16 +340,17 @@
     helpEl.addEventListener('click',(e)=>{ if(e.target===helpEl) closeHelp(); });
 
     // ---------- on-screen touch controls (shared helper) ----------
-    // Drag still rotates the tower for look/steer. These buttons mirror the keyboard:
-    // left/right D-pad rotates the tower (held = continuous, like Arrow/A/D), and the
-    // action buttons cover the game's discrete actions (pause + restart).
+    // Helix Drop is a pure left-right game: the ball falls on its own and the only
+    // thing the player does is rotate the spinning tower to line up the gaps. So the
+    // touch layout is a two-button (◀ ▶) D-pad in the bottom-LEFT thumb zone, and
+    // nothing in the action cluster — there is no fire/jump here, and Pause/Restart
+    // would only sit under the right thumb waiting to be hit by accident (they live
+    // on the keyboard, the header, and the game-over screen). hold:true so a novice
+    // can simply HOLD the arrow to keep the tower spinning, exactly like Arrow/A/D.
+    // Drag-to-rotate stays as an alternative for players who prefer it.
     window.gamfControls({
       move:{ left:rotateLeft, right:rotateRight },   // continuous tower rotation
       hold:true,                                      // auto-repeat while held
-      actions:[
-        { label:'Pause', press:togglePause },
-        { label:'Restart', press:reset },
-      ],
     });
 
     reset(); animate();

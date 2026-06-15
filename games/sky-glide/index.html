@@ -358,6 +358,22 @@
       else flap();
     }
 
+    // hold-safe "rise" for the big on-screen button: a novice will HOLD it like a
+    // gas pedal expecting to keep climbing, so it auto-repeats (helper fires every
+    // 110ms). Repeated flap() is safe — it just re-kicks vy and puffs. But the
+    // modal-dismiss / reset path must fire ONCE per hold, not 9x/sec, so a held
+    // button can't instantly re-reset a fresh run or thrash pause. We dismiss the
+    // modal only on the leading edge and swallow repeats until the button releases.
+    let riseLatched = false;
+    function riseHoldPress(){
+      if (over || paused){
+        if (!riseLatched){ riseLatched = true; primaryAction(); }
+        return;
+      }
+      flap();
+    }
+    function riseHoldRelease(){ riseLatched = false; }
+
     // ---------------------------------------------------------------- input
     // NOTE: no tap-anywhere-to-flap here — discrete actions live on the
     // on-screen buttons below (see gamfControls) so they don't fight any
@@ -511,15 +527,22 @@
     helpEl.addEventListener('click', (e) => { if (e.target === helpEl) hideHelp(); });
 
     // ---------------------------------------------------------------- on-screen buttons
-    // No drag-aim in this game, and "rise"/"down" are discrete impulse actions
-    // (a flap kick / a downward nudge), so every action is an on-screen button
-    // wired to the SAME functions the keyboard uses. Tap-anywhere was removed.
+    // This is a one-button flappy game: the whole game is "flap to rise". A
+    // novice will reach for ONE big button, so Rise is the big primary (bottom-
+    // right, where the thumb naturally rests). It HOLDS (hold:true): a beginner
+    // won't tap-tap-tap — they'll press and hold like a gas pedal, and the helper
+    // auto-repeats the flap so the glider keeps climbing while held, then drifts
+    // back down when released. That's the comfortable, no-thinking mental model.
+    // Down is optional finesse, kept as a single small secondary (no hold — it's
+    // a light nudge, not something you ride down on). Pause/Restart are NOT in the
+    // thumb cluster — they live on the keyboard and the game-over screen, so nobody
+    // pauses by accident while reaching to flap. No D-pad (flap is an impulse, not
+    // sustained motion). Tap-anywhere was removed so it can't fight these buttons.
     window.gamfControls({
       actions: [
-        { label: 'Rise',    press: riseAction },   // ArrowUp / W / Space — flap (or dismiss modal)
-        { label: 'Down',    press: nudgeDown },    // ArrowDown / S — nudge the glide down
-        { label: 'Pause',   press: togglePause },  // P
-        { label: 'Restart', press: reset },        // R
+        // big primary — ArrowUp / W / Space (or dismiss modal); holds to keep climbing
+        { label: 'Rise', press: riseHoldPress, release: riseHoldRelease, hold: true },
+        { label: 'Down', press: nudgeDown },   // small secondary — ArrowDown / S, optional nudge
       ],
     });
 
