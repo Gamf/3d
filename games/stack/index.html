@@ -26,7 +26,7 @@
     <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
   <div class="gx-hint">
-    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> tap — drop the block</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> Drop button</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-keyboard"/></svg> Space / Enter</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
   </div>
@@ -44,7 +44,7 @@
       <div class="gx-modal__title">How to Play</div>
       <p class="gx-help__obj">Drop each moving block to stack it as high as you can — overhang gets sliced off, so line it up perfectly.</p>
       <ul class="gx-help__list">
-        <li><b>Tap / Space</b><span>Drop the block</span></li>
+        <li><b>Drop button / Space</b><span>Drop the block</span></li>
         <li><b>Enter / Arrows</b><span>Drop the block</span></li>
         <li><b>P</b><span>Pause</span></li>
         <li><b>R</b><span>Restart</span></li>
@@ -55,6 +55,7 @@
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import * as THREE from 'three';
 
@@ -165,10 +166,8 @@
       new THREE.ShadowMaterial({opacity:0.28}));
     ground.rotation.x=-Math.PI/2; ground.position.y=-0.5; ground.receiveShadow=true; scene.add(ground);
 
-    // ---- input: touch + keyboard ----
-    addEventListener('pointerup',(e)=>{ if(over||paused) return;
-      // only the play area drops a block — ignore taps on HUD buttons / modals
-      if(e.target!==renderer.domElement) return; drop(); });
+    // ---- input: on-screen buttons + keyboard ----
+    // (no tap-anywhere-to-drop — discrete actions live on buttons; see window.gamfControls below)
     document.getElementById('again').onclick=(e)=>{ e.stopPropagation(); reset(); };
 
     // ---- how-to-play overlay ----
@@ -210,6 +209,13 @@
       camera.position.y += (want-cy)*0.1; camera.lookAt(0,camTargetY,0);
       renderer.render(scene,camera); requestAnimationFrame(animate);
     }
+    // ---- on-screen action buttons (shared helper) ----
+    // Block moves automatically (no drag/keyboard movement), so no D-pad — just the
+    // single discrete action: Drop. Wired to the same drop() the keyboard/Space uses.
+    window.gamfControls({
+      actions:[ { label:'Drop', press:drop } ]
+    });
+
     reset(); animate();
   </script>
 </body>

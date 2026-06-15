@@ -43,7 +43,7 @@
   <!-- controls hint -->
   <div class="gx-hint">
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> drag / swipe — change lane</span>
-    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-left"/></svg><svg class="gx-ico"><use href="#i-right"/></svg> arrows / A D</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-left"/></svg><svg class="gx-ico"><use href="#i-right"/></svg> buttons / arrows / A D</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
   </div>
@@ -65,11 +65,10 @@
       <div class="gx-modal__title">How to play</div>
       <p class="gx-help__obj">Race your cube down an endless track, dodging obstacle blocks and grabbing bonus orbs to push your score as high as you can.</p>
       <ul class="gx-help__list">
-        <li><b>Swipe / ← →</b><span>Switch lane</span></li>
+        <li><b>Swipe / ← → / ◀ ▶</b><span>Switch lane</span></li>
         <li><b>A / D</b><span>Switch lane</span></li>
-        <li><b>Tap / Space</b><span>Restart or resume</span></li>
-        <li><b>P</b><span>Pause</span></li>
-        <li><b>R</b><span>Restart</span></li>
+        <li><b>Pause btn / P</b><span>Pause or resume</span></li>
+        <li><b>Restart btn / R / Space</b><span>Restart</span></li>
       </ul>
       <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
@@ -78,6 +77,7 @@
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import * as THREE from 'three';
     import { onDrag, onSwipe } from './touch.js';
@@ -359,10 +359,8 @@
       if (d === 'left') moveLane(-1);
       else if (d === 'right') moveLane(1);
     }, 36);
-    // tap restarts when game is over
-    renderer.domElement.addEventListener('pointerup', () => {
-      if (over) primaryAction();
-    });
+    // NOTE: tap-anywhere-to-restart was removed — it fought drag-aim. Restart /
+    // resume is exposed as an on-screen action button (see gamfControls below).
 
     const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
       'a','d','w','s','A','D','W','S','p','P','r','R'];
@@ -488,6 +486,22 @@
     document.getElementById('gxHelpOpen').addEventListener('click', openHelp);
     document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
     helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
+
+    // ---------------------------------------------------------------- on-screen controls
+    // Drag / swipe still steers (look/aim-style lane movement). The D-pad mirrors
+    // the keyboard lane switch; the action buttons mirror the discrete keys
+    // (P pause / resume, R restart). Same functions the keyboard calls.
+    window.gamfControls({
+      move: {
+        left:  () => moveLane(-1),   // same as ArrowLeft / A
+        right: () => moveLane(1),    // same as ArrowRight / D
+      },
+      hold: true,                    // continuous lane change while held
+      actions: [
+        { label: 'Pause',   press: togglePause },   // same as P
+        { label: 'Restart', press: reset },         // same as R
+      ],
+    });
 
     reset(); animate();
 

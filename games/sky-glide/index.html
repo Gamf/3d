@@ -44,7 +44,7 @@
 
   <!-- controls hint -->
   <div class="gx-hint">
-    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-up"/></svg> tap / space — rise</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-up"/></svg> Rise button / space — rise</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-bolt"/></svg> fly through the rings</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
@@ -80,9 +80,9 @@
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import * as THREE from 'three';
-    import { onTap } from './touch.js';
 
     // ---------------------------------------------------------------- seeded LCG
     // No Math.random / Date — fully deterministic gate stream.
@@ -347,12 +347,21 @@
       flap();
     }
 
-    // ---------------------------------------------------------------- input
-    // tap to flap (and to restart / resume from the modal-less canvas)
-    onTap(renderer.domElement, () => {
+    // a "down nudge": ease the glide downward a touch
+    function nudgeDown(){
+      if (started && !over && !paused) vy -= 0.12;
+    }
+
+    // the on-screen / keyboard "rise" action: flap, or dismiss the modal first
+    function riseAction(){
       if (over || paused) primaryAction();
       else flap();
-    });
+    }
+
+    // ---------------------------------------------------------------- input
+    // NOTE: no tap-anywhere-to-flap here — discrete actions live on the
+    // on-screen buttons below (see gamfControls) so they don't fight any
+    // drag gesture. Keyboard still works.
 
     const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
       'a','d','w','s','A','D','W','S','p','P','r','R'];
@@ -365,13 +374,12 @@
       // up / w / space / enter all flap (and dismiss the modal)
       if (k === 'ArrowUp' || k === 'w' || k === 'W' ||
           k === ' ' || k === 'Enter'){
-        if (over || paused) primaryAction();
-        else flap();
+        riseAction();
         return;
       }
       // down nudges the glide down a touch (optional finesse)
       if (k === 'ArrowDown' || k === 's' || k === 'S'){
-        if (started && !over && !paused) vy -= 0.12;
+        nudgeDown();
         return;
       }
     });
@@ -501,6 +509,19 @@
     document.getElementById('gxHelpOpen').addEventListener('click', showHelp);
     document.getElementById('gxHelpClose').addEventListener('click', hideHelp);
     helpEl.addEventListener('click', (e) => { if (e.target === helpEl) hideHelp(); });
+
+    // ---------------------------------------------------------------- on-screen buttons
+    // No drag-aim in this game, and "rise"/"down" are discrete impulse actions
+    // (a flap kick / a downward nudge), so every action is an on-screen button
+    // wired to the SAME functions the keyboard uses. Tap-anywhere was removed.
+    window.gamfControls({
+      actions: [
+        { label: 'Rise',    press: riseAction },   // ArrowUp / W / Space — flap (or dismiss modal)
+        { label: 'Down',    press: nudgeDown },    // ArrowDown / S — nudge the glide down
+        { label: 'Pause',   press: togglePause },  // P
+        { label: 'Restart', press: reset },        // R
+      ],
+    });
 
     reset(); animate();
 

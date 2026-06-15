@@ -96,6 +96,7 @@
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import * as THREE from 'three';
     import { onDrag } from './touch.js';
@@ -403,10 +404,8 @@
         targetAngle -= (e.dx / innerWidth) * Math.PI * 2.6;
       }
     });
-    // tap (no real drag) begins / restarts
-    renderer.domElement.addEventListener('pointerup', (e) => {
-      if (over) primaryAction();
-    });
+    // NOTE: tap-anywhere-to-act removed — it fought drag-aim. The launch / resume /
+    // play-again action is now an on-screen button (see gamfControls below).
 
     const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
       'a','d','w','s','A','D','W','S','p','P','r','R'];
@@ -575,6 +574,23 @@
       helpEl.classList.add('gx-show');
       localStorage.setItem(SEEN_KEY, '1');
     }
+
+    // ---------------------------------------------------------------- on-screen controls
+    // Drag still swings the ship around the orbit (look/aim/movement). Every discrete
+    // action is an on-screen button wired to the same functions the keyboard uses:
+    //  • ◀ / ▶ nudge the ship one step around the orbit (keyboard arrows / A D)
+    //  • Launch — begin / resume / play again (keyboard space / enter)
+    //  • Pause  — pause / resume (keyboard P)
+    //  • Restart — restart the run (keyboard R)
+    window.gamfControls({
+      actions: [
+        { label: '◀',       press: () => nudge(1)      },
+        { label: '▶',       press: () => nudge(-1)     },
+        { label: 'Launch',  press: primaryAction       },
+        { label: 'Pause',   press: togglePause         },
+        { label: 'Restart', press: reset               }
+      ]
+    });
 
     reset(); animate();
   </script>

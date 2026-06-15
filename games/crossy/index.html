@@ -38,12 +38,12 @@
     <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
-  <!-- tap-to-start flash -->
-  <div class="cy-flash" id="flash">Tap to hop</div>
+  <!-- get-ready flash -->
+  <div class="cy-flash" id="flash">Hop to start</div>
 
   <!-- controls hint -->
   <div class="gx-hint">
-    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-up"/></svg> tap — hop forward</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-up"/></svg> buttons — hop</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-left"/></svg><svg class="gx-ico"><use href="#i-right"/></svg> swipe / arrows / WASD</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
@@ -66,8 +66,8 @@
       <div class="gx-modal__title">How to play</div>
       <p class="gx-help__obj">Hop forward across roads and rivers as far as you can — dodge cars and ride logs without drowning.</p>
       <ul class="gx-help__list">
-        <li><b>Tap / Space</b> <span>Hop forward</span></li>
-        <li><b>Swipe / Arrows / WASD</b> <span>Move any direction</span></li>
+        <li><b>D-pad / Arrows / WASD</b> <span>Hop any direction</span></li>
+        <li><b>Swipe</b> <span>Hop any direction</span></li>
         <li><b>P</b> <span>Pause</span></li>
         <li><b>R</b> <span>Restart</span></li>
       </ul>
@@ -78,9 +78,10 @@
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import * as THREE from 'three';
-    import { onTap, onSwipe } from './touch.js';
+    import { onSwipe } from './touch.js';
 
     // ---------------------------------------------------------------- seeded LCG
     // No Math.random / Date — the whole world is generated deterministically.
@@ -478,11 +479,9 @@
     function restart(){ resetState(); }
 
     // ---------------------------------------------------------------- input
-    onTap(renderer.domElement, () => {
-      if (over){ primaryAction(); return; }
-      if (paused){ return; }
-      tryHop(0, 1);   // a plain tap = hop forward
-    });
+    // No tap-anywhere-to-hop: discrete hops are on-screen D-pad buttons (see
+    // window.gamfControls below) so they never fight a future drag/aim. Swipe
+    // gestures stay as a convenient directional shortcut.
     onSwipe(renderer.domElement, (d) => {
       if (over || paused) return;
       if (d === 'up')    tryHop(0, 1);
@@ -514,6 +513,25 @@
     });
     document.getElementById('again').addEventListener('click', (e) => {
       e.stopPropagation(); primaryAction();
+    });
+
+    // ---------------------------------------------------------------- on-screen controls
+    // This game has NO drag-aim — every action is discrete (a hop in one of four
+    // directions, plus pause/restart). So we expose a move D-pad + action buttons,
+    // each wired to the SAME functions the keyboard uses. Hops are step-based, so
+    // no auto-repeat (hold:false). Keyboard + swipe keep working alongside these.
+    window.gamfControls({
+      move: {
+        up:    () => tryHop(0, 1),
+        down:  () => tryHop(0, -1),
+        left:  () => tryHop(-1, 0),
+        right: () => tryHop(1, 0)
+      },
+      hold: false,
+      actions: [
+        { label: 'Pause',   press: togglePause },
+        { label: 'Restart', press: restart }
+      ]
     });
 
     // ---------------------------------------------------------------- how to play

@@ -79,6 +79,7 @@
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import * as THREE from 'three';
     import { onDrag } from './touch.js';
@@ -522,7 +523,8 @@
       },
       end: () => { dragOX = dragOZ = null; inTiltX = 0; inTiltZ = 0; }
     });
-    renderer.domElement.addEventListener('pointerup', () => { if (over) primaryAction(); });
+    // NOTE: tap-anywhere-to-act removed — it fought drag-to-tilt. Discrete
+    // actions (pause / restart) are on-screen buttons via window.gamfControls.
 
     // ---------------------------------------------------------------- input: keyboard
     const keys = Object.create(null);
@@ -728,6 +730,16 @@
     document.getElementById('gxHelpOpen').addEventListener('click', openHelp);
     document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
     helpEl.addEventListener('click', (e) => { if (e.target === helpEl) closeHelp(); });
+
+    // ---------------------------------------------------------------- on-screen buttons
+    // Drag tilts the board (movement/aim). Discrete actions are buttons — wired to
+    // the SAME functions the keyboard uses (P = pause, R = restart). Keyboard still works.
+    window.gamfControls({
+      actions: [
+        { label: 'Pause', press: togglePause },   // same as 'P'
+        { label: 'Restart', press: newGame },     // same as 'R'
+      ],
+    });
 
     newGame(); animate();
 

@@ -94,6 +94,7 @@
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import * as THREE from 'three';
     import { onDrag } from './touch.js';
@@ -412,10 +413,8 @@
       },
       end: () => { dragAccum = 0; }
     });
-    // tap (no real drag) restarts/begins
-    renderer.domElement.addEventListener('pointerup', (e) => {
-      if (over) primaryAction();
-    });
+    // (tap-anywhere-to-act removed — it fought drag-aim. Discrete actions are
+    //  on-screen buttons via gamfControls, see below.)
 
     const GAME_KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter',
       'a','d','w','s','A','D','W','S','p','P','r','R'];
@@ -576,6 +575,21 @@
       helpEl.classList.add('gx-show');
       localStorage.setItem(SEEN_KEY, '1');
     }
+
+    // ---------------------------------------------------------------- on-screen buttons
+    // Drag still handles continuous look/steer (rotate around the wall). Every
+    // DISCRETE action is an on-screen button wired to the SAME function the
+    // keyboard uses — no tap-anywhere-to-act. Left/Right step-rotate (same as
+    // the arrow keys via nudge); hold:true auto-repeats for smooth steering.
+    window.gamfControls({
+      move: { left: () => nudge(1), right: () => nudge(-1) },
+      hold: true,
+      actions: [
+        { label: 'Dive',    press: primaryAction },
+        { label: 'Pause',   press: togglePause },
+        { label: 'Restart', press: reset },
+      ],
+    });
 
     reset(); animate();
   </script>

@@ -34,10 +34,10 @@
     <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
-  <div class="cs-start" id="startMsg"><b>Tap or press Space<br>to hop the ball up</b></div>
+  <div class="cs-start" id="startMsg"><b>Press Hop or Space<br>to hop the ball up</b></div>
 
   <div class="gx-hint">
-    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-up"/></svg> tap / space — hop</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-up"/></svg> Hop / space — hop</span>
     <span class="gx-hint__chip">match the arc color</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-pause"/></svg> P pause</span>
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-restart"/></svg> R restart</span>
@@ -68,7 +68,7 @@
       <div class="gx-modal__title">How to play</div>
       <p class="gx-help__obj">Hop the ball up through each ring, but only when its color matches the arc you pass through.</p>
       <ul class="gx-help__list">
-        <li><b>Tap / Space</b><span>Hop up</span></li>
+        <li><b>Hop / Space</b><span>Hop up</span></li>
         <li><b>Up / W</b><span>Hop up</span></li>
         <li><b>Match color</b><span>Pass the ring</span></li>
         <li><b>Prisms</b><span>Swap ball color</span></li>
@@ -82,9 +82,9 @@
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import * as THREE from 'three';
-    import { onTap } from './touch.js';
 
     // ---------- seeded LCG (deterministic — no Math.random / Date) ----------
     let seed = 0x1A2B3C4D >>> 0;
@@ -287,8 +287,6 @@
     }
 
     // ---------- input ----------
-    onTap(renderer.domElement, ()=>{ if(!document.getElementById('gxHelp').classList.contains('gx-show')) hop(); });
-
     const GAME_KEYS = new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','Enter',
       'w','a','s','d','W','A','S','D','p','P','r','R']);
     function helpOpen(){ return document.getElementById('gxHelp').classList.contains('gx-show'); }
@@ -301,6 +299,17 @@
       if(k==='p'||k==='P'){ togglePause(); return; }
       if(k===' '||k==='Enter'||k==='ArrowUp'||k==='w'||k==='W'){ hop(); return; }
     });
+    // ---------- on-screen action buttons (shared helper) ----------
+    // No drag-aim / movement in this game — the single discrete action is the hop.
+    // Expose it (plus pause/restart) as on-screen buttons; same fns as the keyboard.
+    window.gamfControls({
+      actions:[
+        { label:'Restart', press:()=>{ if(!helpOpen()) reset(); } },
+        { label:'Pause',   press:()=>{ if(!helpOpen()) togglePause(); } },
+        { label:'Hop',     press:()=>{ if(!helpOpen()) hop(); } },
+      ],
+    });
+
     document.getElementById('again').onclick = (e)=>{ e.stopPropagation(); reset(); };
     // tapping the game-over backdrop also restarts
     document.getElementById('over').addEventListener('pointerdown', (e)=>{
